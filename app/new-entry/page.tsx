@@ -16,34 +16,46 @@ export default function CameraScreen() {
   const [capturedImages, setCapturedImages] = useState<string[]>([])
   const [showAddAnother, setShowAddAnother] = useState(false)
   const [cameraError, setCameraError] = useState<string | null>(null)
+  const [isCameraSupported, setIsCameraSupported] = useState(true)
+
+  // Check if getUserMedia is supported
+  useEffect(() => {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      setIsCameraSupported(false)
+      setCameraError("Camera API not supported in this browser.")
+      console.error("getUserMedia is not supported in this browser")
+      return
+    }
+  }, [])
 
   // Initialize camera
   useEffect(() => {
+    if (!isCameraSupported) return
+
     let stream: MediaStream | null = null
 
     async function setupCamera() {
       try {
-        // Request camera access with flash if supported
+        // Request camera access with basic constraints - torch/flash is generally not well-supported in browsers
         const constraints = {
           video: {
             facingMode: "environment", // Use back camera if available
             width: { ideal: 1920 },
             height: { ideal: 1080 },
-            advanced: [{ torch: isFlashOn }], // May not be supported on all devices
           },
         }
 
+        // Simplified approach without torch which causes type issues
         stream = await navigator.mediaDevices.getUserMedia(constraints)
 
         if (videoRef.current) {
           videoRef.current.srcObject = stream
           setHasCamera(true)
+          setCameraError(null) // Clear any previous errors
         }
       } catch (err) {
         console.error("Error accessing camera:", err)
-         const errorMessage = err instanceof Error ? err.message : "Could not access camera. Please check permissions.";
-        setCameraError(errorMessage)
-
+        setCameraError("Could not access camera. Please check permissions.")
         setHasCamera(false)
       }
     }
@@ -56,11 +68,13 @@ export default function CameraScreen() {
         stream.getTracks().forEach((track) => track.stop())
       }
     }
-  }, [isFlashOn]) // Re-initialize when flash setting changes
+  }, [isCameraSupported]) // Remove isFlashOn dependency since we're not using it now
 
-  // Toggle flash (may not work on all devices/browsers)
+  // Toggle flash - note: this likely won't work in most browsers but keeping UI for consistency
   const toggleFlash = () => {
     setIsFlashOn(!isFlashOn)
+    // In a real implementation, we would need a more complex approach to handle flash
+    // Most browsers don't support controlling the camera flash via the web API
   }
 
   // Capture image
@@ -146,6 +160,7 @@ export default function CameraScreen() {
             size="icon"
             className="rounded-full bg-black/50 text-white hover:bg-black/70"
             onClick={toggleFlash}
+            disabled={!hasCamera}
           >
             {isFlashOn ? <Zap className="h-6 w-6 text-yellow-400" /> : <ZapOff className="h-6 w-6" />}
             <span className="sr-only">Toggle Flash</span>

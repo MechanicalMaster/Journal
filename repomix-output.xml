@@ -44,6 +44,9 @@ The content is organized as follows:
 
 <directory_structure>
 app/
+  api/
+    process-image/
+      route.ts
   entries/
     [id]/
       edit/
@@ -53,6 +56,12 @@ app/
     page.tsx
   extract/
     page.tsx
+  forgot-password/
+    page.tsx
+  landing/
+    page.tsx
+  login/
+    page.tsx
   new-entry/
     page.tsx
   preview/
@@ -61,10 +70,19 @@ app/
     page.tsx
   settings/
     page.tsx
+  signup/
+    page.tsx
+  error.tsx
   globals.css
+  home.tsx
   layout.tsx
+  not-found.tsx
   page.tsx
 components/
+  auth/
+    login-form.tsx
+    protected-route.tsx
+    signup-form.tsx
   ui/
     accordion.tsx
     alert-dialog.tsx
@@ -124,6 +142,10 @@ hooks/
   use-mobile.tsx
   use-toast.ts
 lib/
+  auth-context.tsx
+  firebase.ts
+  image-service.ts
+  journal-service.ts
   utils.ts
 public/
   placeholder-logo.svg
@@ -141,6 +163,291 @@ tsconfig.json
 
 <files>
 This section contains the contents of the repository's files.
+
+<file path="app/api/process-image/route.ts">
+import { NextRequest, NextResponse } from 'next/server';
+import OpenAI from 'openai';
+
+// Initialize OpenAI client
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
+});
+
+export async function POST(request: NextRequest) {
+  try {
+    // Get the image data from the request
+    const { imageData } = await request.json();
+
+    if (!imageData) {
+      return NextResponse.json(
+        { error: "Image data is required" },
+        { status: 400 }
+      );
+    }
+
+    // Create a system prompt for extracting text from the journal page
+    const systemPrompt = `
+      You are an AI assistant specialized in extracting text from images of handwritten or typed journal pages.
+      Please extract all the text from the image accurately.
+      Format the text in a natural way, preserving paragraphs, bullet points, and line breaks as they appear in the original.
+      Indicate uncertain words or phrases with [brackets].
+      If the text is completely unreadable, please indicate that.
+    `;
+
+    // Call the OpenAI Vision API
+    const response = await openai.chat.completions.create({
+      model: "gpt-4.1-nano-2025-04-14",
+      messages: [
+        {
+          role: "system",
+          content: systemPrompt,
+        },
+        {
+          role: "user",
+          content: [
+            { type: "text", text: "Extract all text from this journal page:" },
+            {
+              type: "image_url",
+              image_url: {
+                url: imageData,
+              },
+            },
+          ],
+        },
+      ],
+      max_tokens: 1000,
+    });
+
+    // Extract the result from the API response
+    const extractedText = response.choices[0]?.message.content || "No text could be extracted.";
+
+    // Identify potentially uncertain words (marked with brackets)
+    const errorRanges: { start: number; end: number }[] = [];
+    const regex = /\[(.*?)\]/g;
+    let match;
+    
+    while ((match = regex.exec(extractedText)) !== null) {
+      errorRanges.push({
+        start: match.index,
+        end: match.index + match[0].length,
+      });
+    }
+
+    return NextResponse.json({
+      success: true,
+      text: extractedText,
+      errorRanges,
+    });
+  } catch (error) {
+    console.error('Error processing image:', error);
+    
+    // Determine if it's an OpenAI API error or other error
+    let errorMessage = "Failed to process image";
+    let errorDetails = "";
+    
+    if (error instanceof OpenAI.APIError) {
+      errorMessage = error.message;
+      errorDetails = JSON.stringify({
+        type: error.type,
+        code: error.code,
+        status: error.status
+      });
+    } else if (error instanceof Error) {
+      errorMessage = error.message;
+      errorDetails = error.stack || "";
+    }
+    
+    return NextResponse.json(
+      { 
+        success: false,
+        error: errorMessage, 
+        details: errorDetails 
+      },
+      { status: 500 }
+    );
+  }
+}
+</file>
+
+<file path="lib/image-service.ts">
+import { getStorage, ref, uploadString, getDownloadURL } from "firebase/storage";
+import { app } from "./firebase";
+
+// Initialize Firebase Storage
+const storage = getStorage(app);
+
+interface ProcessImageResult {
+  success: boolean;
+  text?: string;
+  errorRanges?: { start: number; end: number }[];
+  error?: string;
+}
+
+export const imageService = {
+  // Upload an image to Firebase Storage
+  async uploadImage(imageDataUrl: string, userId: string): Promise<string> {
+    try {
+      // Create a unique file name
+      const timestamp = Date.now();
+      const imageRef = ref(storage, `journal-images/${userId}/${timestamp}.jpg`);
+      
+      // Upload the image
+      const dataUrlWithoutPrefix = imageDataUrl.split(',')[1];
+      await uploadString(imageRef, dataUrlWithoutPrefix, 'base64');
+      
+      // Get the download URL
+      const downloadUrl = await getDownloadURL(imageRef);
+      return downloadUrl;
+    } catch (error) {
+      console.error('Error uploading image:', error);
+      throw error;
+    }
+  },
+  
+  // Process an image with the OpenAI Vision API
+  async processImage(imageDataUrl: string): Promise<ProcessImageResult> {
+    try {
+      const response = await fetch('/api/process-image', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ imageData: imageDataUrl }),
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        console.error('API error response:', errorData);
+        return {
+          success: false,
+          error: errorData.error || errorData.details || 'Failed to process image',
+        };
+      }
+      
+      return await response.json();
+    } catch (error) {
+      console.error('Error processing image:', error);
+      return {
+        success: false,
+        error: (error as Error).message || 'Failed to process image',
+      };
+    }
+  },
+};
+</file>
+
+<file path="lib/journal-service.ts">
+import { db } from "./firebase";
+import { collection, addDoc, getDocs, query, where, orderBy, deleteDoc, doc, updateDoc } from "firebase/firestore";
+import { imageService } from "./image-service";
+
+export interface JournalEntry {
+  id?: string;
+  userId: string;
+  title: string;
+  text: string;
+  images: string[];
+  qualifiers: string[];
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export const journalService = {
+  // Create a new journal entry
+  async createEntry(entry: Omit<JournalEntry, 'id' | 'createdAt' | 'updatedAt'>): Promise<JournalEntry> {
+    try {
+      const entryWithTimestamps = {
+        ...entry,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+
+      const docRef = await addDoc(collection(db, 'journalEntries'), entryWithTimestamps);
+      
+      return {
+        ...entryWithTimestamps,
+        id: docRef.id,
+      };
+    } catch (error) {
+      console.error('Error creating journal entry:', error);
+      throw error;
+    }
+  },
+
+  // Get all entries for a user
+  async getEntries(userId: string): Promise<JournalEntry[]> {
+    try {
+      const q = query(
+        collection(db, 'journalEntries'),
+        where('userId', '==', userId),
+        orderBy('createdAt', 'desc')
+      );
+      
+      const querySnapshot = await getDocs(q);
+      return querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+      })) as JournalEntry[];
+    } catch (error) {
+      console.error('Error getting journal entries:', error);
+      throw error;
+    }
+  },
+
+  // Update an existing entry
+  async updateEntry(entryId: string, updates: Partial<Omit<JournalEntry, 'id' | 'userId' | 'createdAt'>>): Promise<void> {
+    try {
+      const entryRef = doc(db, 'journalEntries', entryId);
+      await updateDoc(entryRef, {
+        ...updates,
+        updatedAt: new Date(),
+      });
+    } catch (error) {
+      console.error('Error updating journal entry:', error);
+      throw error;
+    }
+  },
+
+  // Delete an entry
+  async deleteEntry(entryId: string): Promise<void> {
+    try {
+      const entryRef = doc(db, 'journalEntries', entryId);
+      await deleteDoc(entryRef);
+    } catch (error) {
+      console.error('Error deleting journal entry:', error);
+      throw error;
+    }
+  },
+
+  // Process and save a new entry with images
+  async processAndSaveEntry(
+    userId: string,
+    title: string,
+    text: string,
+    imageDataUrls: string[],
+    qualifiers: string[]
+  ): Promise<JournalEntry> {
+    try {
+      // Upload all images to Firebase Storage
+      const imageUrls = await Promise.all(
+        imageDataUrls.map(imageDataUrl => imageService.uploadImage(imageDataUrl, userId))
+      );
+
+      // Create the journal entry
+      return await this.createEntry({
+        userId,
+        title,
+        text,
+        images: imageUrls,
+        qualifiers,
+      });
+    } catch (error) {
+      console.error('Error processing and saving entry:', error);
+      throw error;
+    }
+  },
+};
+</file>
 
 <file path="app/entries/[id]/edit/page.tsx">
 "use client"
@@ -712,6 +1019,7 @@ import {
   Trash2,
   Edit,
   ChevronDown,
+  ChevronUp,
   X,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -746,6 +1054,9 @@ import {
 } from "@/components/ui/sheet"
 import { Progress } from "@/components/ui/progress"
 import { cn } from "@/lib/utils"
+import { useAuth } from "@/lib/auth-context"
+import { journalService, JournalEntry } from "@/lib/journal-service"
+import { useToast } from "@/components/ui/use-toast"
 
 // Mock data for entries
 const mockEntries = Array.from({ length: 50 }, (_, i) => {
@@ -791,9 +1102,11 @@ const filterOptions = {
 
 export default function EntriesListScreen() {
   const router = useRouter()
-  const [entries, setEntries] = useState(mockEntries)
-  const [filteredEntries, setFilteredEntries] = useState(mockEntries)
-  const [displayedEntries, setDisplayedEntries] = useState<typeof mockEntries>([])
+  const { user } = useAuth()
+  const { toast } = useToast()
+  const [entries, setEntries] = useState<JournalEntry[]>([])
+  const [filteredEntries, setFilteredEntries] = useState<JournalEntry[]>([])
+  const [displayedEntries, setDisplayedEntries] = useState<JournalEntry[]>([])
   const [searchQuery, setSearchQuery] = useState("")
   const [page, setPage] = useState(1)
   const [sortOrder, setSortOrder] = useState<"newest" | "oldest">("newest")
@@ -814,6 +1127,31 @@ export default function EntriesListScreen() {
 
   const ENTRIES_PER_PAGE = 20
 
+  // Fetch entries when the component mounts or when the user changes
+  useEffect(() => {
+    const fetchEntries = async () => {
+      if (!user) {
+        setEntries([])
+        return
+      }
+
+      try {
+        const userEntries = await journalService.getEntries(user.uid)
+        setEntries(userEntries)
+        setFilteredEntries(userEntries)
+      } catch (error) {
+        console.error('Error fetching entries:', error)
+        toast({
+          title: "Error loading entries",
+          description: "There was a problem loading your journal entries.",
+          variant: "destructive",
+        })
+      }
+    }
+
+    fetchEntries()
+  }, [user])
+
   // Apply search, filters, and sorting
   useEffect(() => {
     let result = [...entries]
@@ -823,27 +1161,28 @@ export default function EntriesListScreen() {
       const query = searchQuery.toLowerCase()
       result = result.filter(
         (entry) =>
-          entry.text.toLowerCase().includes(query) || entry.qualifiers.some((q) => q.toLowerCase().includes(query)),
+          entry.text.toLowerCase().includes(query) || 
+          entry.qualifiers.some((q: string) => q.toLowerCase().includes(query))
       )
     }
 
     // Apply filters
     if (activeFilters.tones.length > 0) {
-      result = result.filter((entry) => entry.qualifiers.some((q) => activeFilters.tones.includes(q)))
+      result = result.filter((entry) => entry.qualifiers.some((q: string) => activeFilters.tones.includes(q)))
     }
 
     if (activeFilters.topics.length > 0) {
-      result = result.filter((entry) => entry.qualifiers.some((q) => activeFilters.topics.includes(q)))
+      result = result.filter((entry) => entry.qualifiers.some((q: string) => activeFilters.topics.includes(q)))
     }
 
     if (activeFilters.moods.length > 0) {
-      result = result.filter((entry) => entry.qualifiers.some((q) => activeFilters.moods.includes(q)))
+      result = result.filter((entry) => entry.qualifiers.some((q: string) => activeFilters.moods.includes(q)))
     }
 
     // Apply sorting
     result.sort((a, b) => {
-      const dateA = new Date(a.date).getTime()
-      const dateB = new Date(b.date).getTime()
+      const dateA = new Date(a.createdAt).getTime()
+      const dateB = new Date(b.createdAt).getTime()
       return sortOrder === "newest" ? dateB - dateA : dateA - dateB
     })
 
@@ -918,7 +1257,7 @@ export default function EntriesListScreen() {
     }, 300)
   }
 
-  const formatDate = (dateString: string) => {
+  const formatDate = (dateString: string | Date) => {
     const date = new Date(dateString)
     return date.toLocaleDateString("en-US", {
       year: "numeric",
@@ -933,6 +1272,27 @@ export default function EntriesListScreen() {
 
   const goBack = () => {
     router.push("/")
+  }
+
+  // Update the handleDelete function
+  const handleDelete = async (entryId: string) => {
+    try {
+      await journalService.deleteEntry(entryId)
+      setEntries((prevEntries) => prevEntries.filter((entry) => entry.id !== entryId))
+      setFilteredEntries((prevEntries) => prevEntries.filter((entry) => entry.id !== entryId))
+      
+      toast({
+        title: "Entry deleted",
+        description: "The journal entry has been deleted successfully.",
+      })
+    } catch (error) {
+      console.error('Error deleting entry:', error)
+      toast({
+        title: "Error deleting entry",
+        description: "There was a problem deleting the journal entry.",
+        variant: "destructive",
+      })
+    }
   }
 
   return (
@@ -1022,77 +1382,57 @@ export default function EntriesListScreen() {
 
             <div className="grid gap-4">
               {displayedEntries.map((entry) => (
-                <Card
+                <div
                   key={entry.id}
-                  className="cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors"
-                  onClick={() => goToEntryDetails(entry.id)}
+                  className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4 hover:shadow-md transition-shadow cursor-pointer"
+                  onClick={() => entry.id && goToEntryDetails(entry.id)}
                 >
-                  <CardContent className="p-4">
-                    <div className="flex gap-4">
-                      <div className="h-20 w-16 flex-shrink-0 rounded-md overflow-hidden bg-gray-100 dark:bg-gray-800">
-                        <img
-                          src={entry.thumbnail || "/placeholder.svg"}
-                          alt={`Thumbnail for ${entry.id}`}
-                          className="h-full w-full object-cover"
-                        />
-                      </div>
-
-                      <div className="flex-1 min-w-0">
-                        <div className="flex justify-between items-start">
-                          <p className="text-sm font-medium line-clamp-2">{entry.text}</p>
-                          <div className="flex items-center gap-2 ml-2 flex-shrink-0">
-                            <DropdownMenu>
-                              <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-                                <Button variant="ghost" size="icon" className="h-8 w-8">
-                                  <ChevronDown className="h-4 w-4" />
-                                </Button>
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent align="end">
-                                <DropdownMenuItem
-                                  onClick={(e) => {
-                                    e.stopPropagation()
-                                    router.push(`/entries/${entry.id}/edit`)
-                                  }}
-                                >
-                                  <Edit className="h-4 w-4 mr-2" />
-                                  Edit
-                                </DropdownMenuItem>
-                                <DropdownMenuSeparator />
-                                <DropdownMenuItem
-                                  className="text-red-600 dark:text-red-400"
-                                  onClick={(e) => {
-                                    e.stopPropagation()
-                                    // In a real app, you would show a confirmation dialog
-                                    setEntries(entries.filter((e) => e.id !== entry.id))
-                                  }}
-                                >
-                                  <Trash2 className="h-4 w-4 mr-2" />
-                                  Delete
-                                </DropdownMenuItem>
-                              </DropdownMenuContent>
-                            </DropdownMenu>
-                          </div>
-                        </div>
-
-                        <div className="flex flex-wrap gap-1 mt-2">
-                          {entry.qualifiers.map((qualifier, i) => (
-                            <Badge key={i} variant="secondary" className="text-xs">
-                              {qualifier}
-                            </Badge>
+                  <div className="flex justify-between items-start">
+                    <div className="flex-1">
+                      <h3 className="font-medium">{entry.title}</h3>
+                      <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                        {formatDate(entry.createdAt)}
+                      </p>
+                      <p className="mt-2 text-gray-600 dark:text-gray-300 line-clamp-2">
+                        {entry.text}
+                      </p>
+                      {entry.images && entry.images.length > 0 && (
+                        <div className="mt-2 flex gap-2">
+                          {entry.images.slice(0, 3).map((image, index) => (
+                            <div
+                              key={index}
+                              className="w-16 h-16 rounded-md bg-gray-100 dark:bg-gray-700 overflow-hidden"
+                            >
+                              <img
+                                src={image}
+                                alt={`Entry image ${index + 1}`}
+                                className="w-full h-full object-cover"
+                              />
+                            </div>
                           ))}
+                          {entry.images.length > 3 && (
+                            <div className="w-16 h-16 rounded-md bg-gray-100 dark:bg-gray-700 flex items-center justify-center">
+                              <span className="text-sm text-gray-500">
+                                +{entry.images.length - 3}
+                              </span>
+                            </div>
+                          )}
                         </div>
-
-                        <div className="flex justify-between items-center mt-2 text-xs text-gray-500 dark:text-gray-400">
-                          <div className="flex items-center">
-                            <Calendar className="h-3 w-3 mr-1" />
-                            {formatDate(entry.date)}
-                          </div>
-                          <div>{entry.id}</div>
-                        </div>
-                      </div>
+                      )}
                     </div>
-                  </CardContent>
-                </Card>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="text-gray-400 hover:text-red-500"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        entry.id && handleDelete(entry.id)
+                      }}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
               ))}
             </div>
 
@@ -1272,19 +1612,15 @@ import { ArrowLeft, Save, RefreshCw, Edit, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { cn } from "@/lib/utils"
-
-// Mock OCR result with some "errors" to demonstrate highlighting
-const mockOcrResult = {
-  text: "Today I woke up feeling [energized] and ready to tackle the day. My first meeting went well, though there were some [concems] about the timeline. I need to follow up with Sarah about the project [deliverables] by Friday.\n\nThings to remember:\n- Buy groceries\n- Schedule dentist appointment\n- Finish reading chapter 5",
-  errorRanges: [
-    { start: 27, end: 38 }, // [energized]
-    { start: 107, end: 116 }, // [concems]
-    { start: 162, end: 175 }, // [deliverables]
-  ],
-}
+import { useToast } from "@/components/ui/use-toast"
+import { imageService } from "@/lib/image-service"
+import { useAuth } from "@/lib/auth-context"
+import { journalService } from "@/lib/journal-service"
 
 export default function TextExtractionScreen() {
   const router = useRouter()
+  const { toast } = useToast()
+  const { user } = useAuth()
   const [extractedText, setExtractedText] = useState("")
   const [isLoading, setIsLoading] = useState(true)
   const [ocrFailed, setOcrFailed] = useState(false)
@@ -1292,32 +1628,48 @@ export default function TextExtractionScreen() {
   const [statusMessage, setStatusMessage] = useState("Extracting text...")
   const textAreaRef = useRef<HTMLTextAreaElement>(null)
   const [highlightedText, setHighlightedText] = useState<React.ReactNode>(null)
+  const [currentImage, setCurrentImage] = useState<string | null>(null)
 
-  // Simulate OCR process
+  // Process the image using OpenAI API
   useEffect(() => {
-    const simulateOcr = async () => {
+    const extractTextFromImage = async () => {
+      // Get the current image from localStorage
+      const storedImage = localStorage.getItem('currentImage')
+      if (!storedImage) {
+        setOcrFailed(true)
+        setStatusMessage("No image found to process")
+        setIsLoading(false)
+        return
+      }
+
+      setCurrentImage(storedImage)
       setIsLoading(true)
       setStatusMessage("Extracting text...")
 
-      // Simulate API call delay
-      await new Promise((resolve) => setTimeout(resolve, 2500))
+      try {
+        // Call the API to process the image
+        const result = await imageService.processImage(storedImage)
 
-      // Randomly succeed or fail for demonstration
-      const success = Math.random() > 0.3 // 70% success rate
-
-      if (success) {
-        setExtractedText(mockOcrResult.text)
-        setErrorRanges(mockOcrResult.errorRanges)
-        setStatusMessage("Text extracted successfully")
-      } else {
+        if (result.success && result.text) {
+          setExtractedText(result.text)
+          if (result.errorRanges && result.errorRanges.length > 0) {
+            setErrorRanges(result.errorRanges)
+          }
+          setStatusMessage("Text extracted successfully")
+        } else {
+          setOcrFailed(true)
+          setStatusMessage(`OCR failed: ${result.error || 'Text unclear'}`)
+        }
+      } catch (error) {
+        console.error('Error extracting text:', error)
         setOcrFailed(true)
-        setStatusMessage("OCR failed: Text unclear")
+        setStatusMessage(`OCR failed: ${(error as Error).message || "Processing error"}`)
+      } finally {
+        setIsLoading(false)
       }
-
-      setIsLoading(false)
     }
 
-    simulateOcr()
+    extractTextFromImage()
   }, [])
 
   // Process text with highlighted errors
@@ -1361,27 +1713,46 @@ export default function TextExtractionScreen() {
     setErrorRanges([])
   }
 
-  const handleRetryOcr = () => {
+  const handleRetryOcr = async () => {
     // Reset and retry OCR
     setOcrFailed(false)
     setExtractedText("")
     setErrorRanges([])
 
-    // Simulate OCR process again
-    const simulateOcr = async () => {
-      setIsLoading(true)
-      setStatusMessage("Extracting text...")
-
-      // Simulate API call delay
-      await new Promise((resolve) => setTimeout(resolve, 2500))
-
-      setExtractedText(mockOcrResult.text)
-      setErrorRanges(mockOcrResult.errorRanges)
-      setStatusMessage("Text extracted successfully")
-      setIsLoading(false)
+    if (!currentImage) {
+      toast({
+        title: "No image to process",
+        description: "Please go back and capture an image first.",
+        variant: "destructive",
+      })
+      return
     }
 
-    simulateOcr()
+    // Process the image again
+    setIsLoading(true)
+    setStatusMessage("Extracting text...")
+
+    try {
+      // Call the API to process the image
+      const result = await imageService.processImage(currentImage)
+
+      if (result.success && result.text) {
+        setExtractedText(result.text)
+        if (result.errorRanges && result.errorRanges.length > 0) {
+          setErrorRanges(result.errorRanges)
+        }
+        setStatusMessage("Text extracted successfully")
+      } else {
+        setOcrFailed(true)
+        setStatusMessage(`OCR failed: ${result.error || 'Text unclear'}`)
+      }
+    } catch (error) {
+      console.error('Error extracting text:', error)
+      setOcrFailed(true)
+      setStatusMessage(`OCR failed: ${(error as Error).message || "Processing error"}`)
+    } finally {
+      setIsLoading(false)
+    }
   }
 
   const handleManualEntry = () => {
@@ -1396,10 +1767,53 @@ export default function TextExtractionScreen() {
     }
   }
 
-  const handleSaveText = () => {
-    // In a real app, you would save the text here
-    console.log("Saving text:", extractedText)
-    router.push("/qualifiers")
+  const handleSaveText = async () => {
+    if (!user) {
+      toast({
+        title: "Authentication required",
+        description: "Please sign in to save your entry.",
+        variant: "destructive",
+      })
+      return
+    }
+
+    try {
+      // Get the captured images from localStorage
+      const storedImages = localStorage.getItem('capturedImages')
+      const imageDataUrls = storedImages ? JSON.parse(storedImages) : []
+
+      // Create a title from the first few words of the text
+      const title = extractedText.split(' ').slice(0, 5).join(' ') + '...'
+
+      // Save the entry using the journal service
+      await journalService.processAndSaveEntry(
+        user.uid,
+        title,
+        extractedText,
+        imageDataUrls,
+        [] // Qualifiers will be added in the next step
+      )
+
+      // Clear localStorage
+      localStorage.removeItem('currentImage')
+      localStorage.removeItem('capturedImages')
+      localStorage.removeItem('extractedText')
+
+      toast({
+        title: "Entry saved",
+        description: "Your journal entry has been saved successfully.",
+      })
+
+      // Navigate to the entries page
+      router.push("/entries")
+    } catch (error) {
+      console.error('Error saving entry:', error)
+      toast({
+        title: "Error saving entry",
+        description: "There was a problem saving your journal entry.",
+        variant: "destructive",
+      })
+    }
   }
 
   const goBack = () => {
@@ -1508,30 +1922,357 @@ export default function TextExtractionScreen() {
 }
 </file>
 
+<file path="app/forgot-password/page.tsx">
+"use client";
+
+import { useState } from "react";
+import Link from "next/link";
+import { useAuth } from "@/lib/auth-context";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { 
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle 
+} from "@/components/ui/card";
+import { AlertCircle, Book, CheckCircle } from "lucide-react";
+
+export default function ForgotPasswordPage() {
+  const [email, setEmail] = useState("");
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const { resetPassword } = useAuth();
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    // Reset error and success
+    setError("");
+    setSuccess(false);
+    
+    try {
+      setLoading(true);
+      await resetPassword(email);
+      setSuccess(true);
+    } catch (error: any) {
+      if (error.code === "auth/user-not-found") {
+        setError("No account found with this email address");
+      } else {
+        setError("Failed to send password reset email: " + error.message);
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex flex-col">
+      <header className="border-b bg-white dark:bg-gray-950 dark:border-gray-800">
+        <div className="container mx-auto px-4 py-4">
+          <Link href="/landing" className="flex items-center space-x-2">
+            <Book className="h-6 w-6 text-emerald-600" />
+            <span className="text-xl font-bold">Journal</span>
+          </Link>
+        </div>
+      </header>
+      
+      <main className="flex-1 flex items-center justify-center p-4">
+        <Card className="w-full max-w-md mx-auto">
+          <CardHeader>
+            <CardTitle>Reset Password</CardTitle>
+            <CardDescription>
+              Enter your email address and we'll send you a link to reset your password
+            </CardDescription>
+          </CardHeader>
+          <form onSubmit={handleSubmit}>
+            <CardContent className="space-y-4">
+              {error && (
+                <div className="bg-red-50 p-3 rounded-md flex items-center text-sm text-red-800">
+                  <AlertCircle className="h-4 w-4 mr-2" />
+                  {error}
+                </div>
+              )}
+              
+              {success && (
+                <div className="bg-green-50 p-3 rounded-md flex items-center text-sm text-green-800">
+                  <CheckCircle className="h-4 w-4 mr-2" />
+                  Password reset email sent. Check your inbox.
+                </div>
+              )}
+              
+              <div className="space-y-2">
+                <Label htmlFor="email">Email</Label>
+                <Input
+                  id="email"
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                  placeholder="you@example.com"
+                />
+              </div>
+            </CardContent>
+            <CardFooter className="flex flex-col space-y-4">
+              <Button 
+                type="submit" 
+                className="w-full" 
+                disabled={loading}
+              >
+                {loading ? "Sending..." : "Send Reset Link"}
+              </Button>
+              <div className="flex justify-center">
+                <Link href="/login" className="text-sm text-blue-600 hover:underline">
+                  Back to login
+                </Link>
+              </div>
+            </CardFooter>
+          </form>
+        </Card>
+      </main>
+    </div>
+  );
+}
+</file>
+
+<file path="app/landing/page.tsx">
+"use client";
+
+import Link from "next/link";
+import { Button } from "@/components/ui/button";
+import { Book, ArrowRight } from "lucide-react";
+
+export default function LandingPage() {
+  return (
+    <div className="min-h-screen bg-gradient-to-b from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800">
+      {/* Header/Navigation */}
+      <header className="border-b bg-white dark:bg-gray-950 dark:border-gray-800">
+        <div className="container mx-auto px-4 py-4 flex items-center justify-between">
+          <div className="flex items-center space-x-2">
+            <Book className="h-6 w-6 text-emerald-600" />
+            <span className="text-xl font-bold">Journal</span>
+          </div>
+          <div className="flex items-center space-x-4">
+            <Link href="/login">
+              <Button variant="ghost">Sign In</Button>
+            </Link>
+            <Link href="/signup">
+              <Button className="bg-emerald-600 hover:bg-emerald-700">Sign Up</Button>
+            </Link>
+          </div>
+        </div>
+      </header>
+
+      {/* Hero Section */}
+      <section className="py-20">
+        <div className="container mx-auto px-4 flex flex-col items-center text-center">
+          <h1 className="text-4xl md:text-6xl font-bold mb-6">
+            Digitize Your Journal <br className="hidden md:block" /> with Ease
+          </h1>
+          <p className="text-xl md:text-2xl text-gray-600 dark:text-gray-400 mb-10 max-w-3xl">
+            Capture, organize, and preserve your handwritten notes and journal entries digitally
+          </p>
+          <div className="flex flex-col sm:flex-row gap-4">
+            <Link href="/signup">
+              <Button size="lg" className="bg-emerald-600 hover:bg-emerald-700 px-8">
+                Get Started
+                <ArrowRight className="ml-2 h-5 w-5" />
+              </Button>
+            </Link>
+            <Link href="/login">
+              <Button size="lg" variant="outline" className="px-8">
+                Sign In
+              </Button>
+            </Link>
+          </div>
+        </div>
+      </section>
+
+      {/* Features Section */}
+      <section className="py-20 bg-white dark:bg-gray-900">
+        <div className="container mx-auto px-4">
+          <h2 className="text-3xl font-bold text-center mb-12">Features</h2>
+          <div className="grid md:grid-cols-3 gap-8">
+            <div className="bg-gray-50 dark:bg-gray-800 p-6 rounded-lg">
+              <div className="w-12 h-12 rounded-full bg-emerald-100 dark:bg-emerald-900 flex items-center justify-center mb-4">
+                <Book className="h-6 w-6 text-emerald-600" />
+              </div>
+              <h3 className="text-xl font-semibold mb-2">Capture Pages</h3>
+              <p className="text-gray-600 dark:text-gray-400">
+                Easily upload images of your journal pages from your device
+              </p>
+            </div>
+            <div className="bg-gray-50 dark:bg-gray-800 p-6 rounded-lg">
+              <div className="w-12 h-12 rounded-full bg-blue-100 dark:bg-blue-900 flex items-center justify-center mb-4">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h7" />
+                </svg>
+              </div>
+              <h3 className="text-xl font-semibold mb-2">Organize Content</h3>
+              <p className="text-gray-600 dark:text-gray-400">
+                Categorize and search through your digitized journal entries
+              </p>
+            </div>
+            <div className="bg-gray-50 dark:bg-gray-800 p-6 rounded-lg">
+              <div className="w-12 h-12 rounded-full bg-purple-100 dark:bg-purple-900 flex items-center justify-center mb-4">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-purple-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                </svg>
+              </div>
+              <h3 className="text-xl font-semibold mb-2">Secure Storage</h3>
+              <p className="text-gray-600 dark:text-gray-400">
+                Keep your journal entries safe with secure authentication
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Footer */}
+      <footer className="py-8 border-t dark:border-gray-800">
+        <div className="container mx-auto px-4 text-center text-gray-600 dark:text-gray-400">
+          <p>&copy; {new Date().getFullYear()} Journal App. All rights reserved.</p>
+        </div>
+      </footer>
+    </div>
+  );
+}
+</file>
+
+<file path="app/login/page.tsx">
+"use client";
+
+import { LoginForm } from "@/components/auth/login-form";
+import Link from "next/link";
+import { Book } from "lucide-react";
+
+export default function LoginPage() {
+  return (
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex flex-col">
+      <header className="border-b bg-white dark:bg-gray-950 dark:border-gray-800">
+        <div className="container mx-auto px-4 py-4">
+          <Link href="/landing" className="flex items-center space-x-2">
+            <Book className="h-6 w-6 text-emerald-600" />
+            <span className="text-xl font-bold">Journal</span>
+          </Link>
+        </div>
+      </header>
+      
+      <main className="flex-1 flex items-center justify-center p-4">
+        <div className="w-full max-w-md">
+          <LoginForm />
+        </div>
+      </main>
+    </div>
+  );
+}
+</file>
+
 <file path="app/preview/page.tsx">
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
-import { ArrowLeft, Check, Trash2, RotateCw, ZoomIn } from "lucide-react"
+import { ArrowLeft, Check, Trash2, RotateCw, ZoomIn, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { useToast } from "@/components/ui/use-toast"
+import { useAuth } from "@/lib/auth-context"
 
 export default function PreviewScreen() {
   const router = useRouter()
+  const { toast } = useToast()
+  const { user } = useAuth()
   const [currentPage, setCurrentPage] = useState(1)
+  const [isProcessing, setIsProcessing] = useState(false)
+  const [image, setImage] = useState<string | null>(null)
+  const [processedImages, setProcessedImages] = useState<string[]>([])
 
-  // In a real app, you would receive the captured images from the previous screen
-  // For now, we'll use a placeholder
+  // In a real app, we would get this from localStorage or app state
   const placeholderImage = "/placeholder.svg?height=800&width=600"
-  const totalPages = 1
+
+  // Get the captured images from localStorage
+  useEffect(() => {
+    const storedImages = localStorage.getItem('capturedImages')
+    if (storedImages) {
+      const images = JSON.parse(storedImages)
+      setProcessedImages(images)
+      if (images.length > 0) {
+        setImage(images[0])
+      }
+    }
+  }, [])
 
   const goBack = () => {
     router.push("/new-entry")
   }
 
-  const proceedToExtract = () => {
-    // In a real app, you would process and save the images here
-    router.push("/extract")
+  const proceedToExtract = async () => {
+    if (!image) {
+      toast({
+        title: "No image to process",
+        description: "Please go back and capture an image first.",
+        variant: "destructive",
+      })
+      return
+    }
+
+    setIsProcessing(true)
+
+    try {
+      // Store the current image in localStorage for the extract page to use
+      localStorage.setItem('currentImage', image)
+      
+      // Navigate to extract page
+      router.push("/extract")
+    } catch (error) {
+      console.error('Error processing image:', error)
+      toast({
+        title: "Processing Failed",
+        description: "There was an error processing your image. Please try again.",
+        variant: "destructive",
+      })
+      setIsProcessing(false)
+    }
+  }
+
+  const handleDeleteImage = () => {
+    // Remove current image
+    if (processedImages.length > 0) {
+      const newImages = [...processedImages]
+      newImages.splice(currentPage - 1, 1)
+      setProcessedImages(newImages)
+      localStorage.setItem('capturedImages', JSON.stringify(newImages))
+      
+      if (newImages.length === 0) {
+        setImage(null)
+        router.push("/new-entry")
+      } else {
+        setImage(newImages[Math.min(currentPage - 1, newImages.length - 1)])
+        if (currentPage > newImages.length) {
+          setCurrentPage(newImages.length)
+        }
+      }
+    }
+  }
+
+  const handleRotateImage = () => {
+    // Just a placeholder for image rotation functionality
+    toast({
+      title: "Rotate Image",
+      description: "Image rotation functionality would be implemented here.",
+    })
+  }
+
+  const handleZoomImage = () => {
+    // Just a placeholder for image zoom functionality
+    toast({
+      title: "Zoom Image",
+      description: "Image zoom functionality would be implemented here.",
+    })
   }
 
   return (
@@ -1545,9 +2286,21 @@ export default function PreviewScreen() {
             </Button>
             <h1 className="ml-4 text-xl font-semibold">Preview</h1>
           </div>
-          <Button onClick={proceedToExtract}>
-            <Check className="mr-2 h-5 w-5" />
-            Extract Text
+          <Button 
+            onClick={proceedToExtract} 
+            disabled={isProcessing || !image}
+          >
+            {isProcessing ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Processing...
+              </>
+            ) : (
+              <>
+                <Check className="mr-2 h-5 w-5" />
+                Extract Text
+              </>
+            )}
           </Button>
         </div>
       </header>
@@ -1555,28 +2308,28 @@ export default function PreviewScreen() {
       <main className="flex-1 container p-4 flex flex-col items-center justify-center">
         <div className="relative w-full max-w-md aspect-[3/4] bg-white dark:bg-gray-800 rounded-lg shadow-lg overflow-hidden">
           <img
-            src={placeholderImage || "/placeholder.svg"}
+            src={image || placeholderImage}
             alt={`Preview of page ${currentPage}`}
             className="w-full h-full object-contain"
           />
 
-          {totalPages > 1 && (
+          {processedImages.length > 1 && (
             <div className="absolute bottom-2 right-2 px-3 py-1 bg-black/50 rounded-full text-white text-sm">
-              {currentPage} / {totalPages}
+              {currentPage} / {processedImages.length}
             </div>
           )}
         </div>
 
         <div className="flex justify-center mt-6 space-x-4">
-          <Button variant="outline" size="icon">
+          <Button variant="outline" size="icon" onClick={handleDeleteImage} disabled={!image}>
             <Trash2 className="h-5 w-5 text-red-500" />
             <span className="sr-only">Delete</span>
           </Button>
-          <Button variant="outline" size="icon">
+          <Button variant="outline" size="icon" onClick={handleRotateImage} disabled={!image}>
             <RotateCw className="h-5 w-5" />
             <span className="sr-only">Rotate</span>
           </Button>
-          <Button variant="outline" size="icon">
+          <Button variant="outline" size="icon" onClick={handleZoomImage} disabled={!image}>
             <ZoomIn className="h-5 w-5" />
             <span className="sr-only">Zoom</span>
           </Button>
@@ -2091,6 +2844,89 @@ export default function SettingsPage() {
 }
 </file>
 
+<file path="app/signup/page.tsx">
+"use client";
+
+import { SignUpForm } from "@/components/auth/signup-form";
+import Link from "next/link";
+import { Book } from "lucide-react";
+
+export default function SignUpPage() {
+  return (
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex flex-col">
+      <header className="border-b bg-white dark:bg-gray-950 dark:border-gray-800">
+        <div className="container mx-auto px-4 py-4">
+          <Link href="/landing" className="flex items-center space-x-2">
+            <Book className="h-6 w-6 text-emerald-600" />
+            <span className="text-xl font-bold">Journal</span>
+          </Link>
+        </div>
+      </header>
+      
+      <main className="flex-1 flex items-center justify-center p-4">
+        <div className="w-full max-w-md">
+          <SignUpForm />
+        </div>
+      </main>
+    </div>
+  );
+}
+</file>
+
+<file path="app/error.tsx">
+'use client';
+
+import { useEffect } from 'react';
+import Link from 'next/link';
+import { Button } from '@/components/ui/button';
+import { Book } from 'lucide-react';
+
+export default function Error({
+  error,
+  reset,
+}: {
+  error: Error & { digest?: string };
+  reset: () => void;
+}) {
+  useEffect(() => {
+    // Log the error to an error reporting service
+    console.error(error);
+  }, [error]);
+
+  return (
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex flex-col">
+      <header className="border-b bg-white dark:bg-gray-950 dark:border-gray-800">
+        <div className="container mx-auto px-4 py-4">
+          <Link href="/" className="flex items-center space-x-2">
+            <Book className="h-6 w-6 text-emerald-600" />
+            <span className="text-xl font-bold">Journal</span>
+          </Link>
+        </div>
+      </header>
+      
+      <main className="flex-1 flex flex-col items-center justify-center p-6">
+        <div className="text-center space-y-6 max-w-md">
+          <h1 className="text-4xl font-bold">Something went wrong!</h1>
+          <p className="text-gray-600 dark:text-gray-400">
+            We're sorry, but there was an error processing your request.
+          </p>
+          <div className="pt-4 flex flex-col sm:flex-row gap-4 justify-center">
+            <Button onClick={reset}>
+              Try again
+            </Button>
+            <Link href="/">
+              <Button variant="outline">
+                Return Home
+              </Button>
+            </Link>
+          </div>
+        </div>
+      </main>
+    </div>
+  );
+}
+</file>
+
 <file path="app/globals.css">
 @tailwind base;
 @tailwind components;
@@ -2200,119 +3036,313 @@ export default function SettingsPage() {
 }
 </file>
 
-<file path="app/layout.tsx">
-import type React from "react"
-import type { Metadata } from "next"
-import { Inter } from "next/font/google"
-import "./globals.css"
-import { Toaster } from "@/components/ui/toaster"
+<file path="app/not-found.tsx">
+import Link from 'next/link';
+import { Button } from '@/components/ui/button';
+import { Book } from 'lucide-react';
 
-const inter = Inter({ subsets: ["latin"] })
-
-export const metadata: Metadata = {
-  title: "Journal Digitizer",
-  description: "Digitize your journal entries with ease",
-    generator: 'v0.dev'
-}
-
-export default function RootLayout({
-  children,
-}: Readonly<{
-  children: React.ReactNode
-}>) {
+export default function NotFound() {
   return (
-    <html lang="en">
-      <body className={inter.className}>
-        {children}
-        <Toaster />
-      </body>
-    </html>
-  )
-}
-
-
-import './globals.css'
-</file>
-
-<file path="app/page.tsx">
-"use client"
-
-import { useState, useEffect } from "react"
-import { useRouter } from "next/navigation"
-import { Book, Settings, List, WifiOff } from "lucide-react"
-import { Button } from "@/components/ui/button"
-import { Header } from "@/components/header"
-import { Footer } from "@/components/footer"
-
-export default function HomePage() {
-  const router = useRouter()
-  const [isOnline, setIsOnline] = useState(true)
-
-  // Check online status
-  useEffect(() => {
-    const handleOnline = () => setIsOnline(true)
-    const handleOffline = () => setIsOnline(false)
-
-    // Set initial status
-    setIsOnline(navigator.onLine)
-
-    // Add event listeners
-    window.addEventListener("online", handleOnline)
-    window.addEventListener("offline", handleOffline)
-
-    // Clean up
-    return () => {
-      window.removeEventListener("online", handleOnline)
-      window.removeEventListener("offline", handleOffline)
-    }
-  }, [])
-
-  return (
-    <div className="flex flex-col min-h-screen bg-gray-50 dark:bg-gray-900">
-      <Header />
-
-      <main className="flex-1 flex flex-col items-center justify-center p-6 space-y-8">
-        {!isOnline && (
-          <div className="flex items-center justify-center p-4 mb-4 rounded-lg bg-amber-50 dark:bg-amber-900/20 text-amber-800 dark:text-amber-200">
-            <WifiOff className="h-5 w-5 mr-2" />
-            <p>Connect to the internet to digitize entries.</p>
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex flex-col">
+      <header className="border-b bg-white dark:bg-gray-950 dark:border-gray-800">
+        <div className="container mx-auto px-4 py-4">
+          <Link href="/" className="flex items-center space-x-2">
+            <Book className="h-6 w-6 text-emerald-600" />
+            <span className="text-xl font-bold">Journal</span>
+          </Link>
+        </div>
+      </header>
+      
+      <main className="flex-1 flex flex-col items-center justify-center p-6">
+        <div className="text-center space-y-6 max-w-md">
+          <h1 className="text-4xl font-bold">404</h1>
+          <h2 className="text-2xl font-medium">Page Not Found</h2>
+          <p className="text-gray-600 dark:text-gray-400">
+            The page you're looking for doesn't exist or has been moved.
+          </p>
+          <div className="pt-4">
+            <Link href="/">
+              <Button>
+                Return Home
+              </Button>
+            </Link>
           </div>
-        )}
-
-        <div className="grid gap-6 w-full max-w-md">
-          <Button
-            size="lg"
-            className="h-24 text-lg bg-emerald-600 hover:bg-emerald-700 dark:bg-emerald-700 dark:hover:bg-emerald-800"
-            onClick={() => router.push("/new-entry")}
-            disabled={!isOnline}
-          >
-            <Book className="mr-2 h-6 w-6" />
-            New Entry
-          </Button>
-
-          <Button
-            size="lg"
-            className="h-24 text-lg bg-blue-600 hover:bg-blue-700 dark:bg-blue-700 dark:hover:bg-blue-800"
-            onClick={() => router.push("/entries")}
-          >
-            <List className="mr-2 h-6 w-6" />
-            View Entries
-          </Button>
-
-          <Button
-            size="lg"
-            className="h-24 text-lg bg-purple-600 hover:bg-purple-700 dark:bg-purple-700 dark:hover:bg-purple-800"
-            onClick={() => router.push("/settings")}
-          >
-            <Settings className="mr-2 h-6 w-6" />
-            Settings
-          </Button>
         </div>
       </main>
-
-      <Footer isOnline={isOnline} />
     </div>
-  )
+  );
+}
+</file>
+
+<file path="components/auth/login-form.tsx">
+"use client";
+
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { useAuth } from "@/lib/auth-context";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { 
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle 
+} from "@/components/ui/card";
+import { AlertCircle } from "lucide-react";
+import Link from "next/link";
+
+export function LoginForm() {
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+  const { signIn } = useAuth();
+  const router = useRouter();
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    // Reset error
+    setError("");
+    
+    try {
+      setLoading(true);
+      await signIn(email, password);
+      router.push("/");
+    } catch (error: any) {
+      if (error.code === "auth/user-not-found" || error.code === "auth/wrong-password") {
+        setError("Invalid email or password");
+      } else {
+        setError("Failed to sign in: " + error.message);
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <Card className="w-full max-w-md mx-auto">
+      <CardHeader>
+        <CardTitle>Sign in</CardTitle>
+        <CardDescription>
+          Enter your email and password to access your account
+        </CardDescription>
+      </CardHeader>
+      <form onSubmit={handleSubmit}>
+        <CardContent className="space-y-4">
+          {error && (
+            <div className="bg-red-50 p-3 rounded-md flex items-center text-sm text-red-800">
+              <AlertCircle className="h-4 w-4 mr-2" />
+              {error}
+            </div>
+          )}
+          <div className="space-y-2">
+            <Label htmlFor="email">Email</Label>
+            <Input
+              id="email"
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+              placeholder="you@example.com"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="password">Password</Label>
+            <Input
+              id="password"
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+              placeholder="Enter your password"
+            />
+          </div>
+          <div className="flex justify-end">
+            <Link href="/forgot-password" className="text-sm text-blue-600 hover:underline">
+              Forgot password?
+            </Link>
+          </div>
+        </CardContent>
+        <CardFooter className="flex flex-col space-y-4">
+          <Button 
+            type="submit" 
+            className="w-full" 
+            disabled={loading}
+          >
+            {loading ? "Signing in..." : "Sign in"}
+          </Button>
+          <p className="text-sm text-center text-muted-foreground">
+            Don't have an account?{" "}
+            <Link href="/signup" className="text-blue-600 hover:underline">
+              Create account
+            </Link>
+          </p>
+        </CardFooter>
+      </form>
+    </Card>
+  );
+}
+</file>
+
+<file path="components/auth/protected-route.tsx">
+"use client";
+
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { useAuth } from "@/lib/auth-context";
+
+export function ProtectedRoute({ children }: { children: React.ReactNode }) {
+  const { user, loading } = useAuth();
+  const router = useRouter();
+
+  useEffect(() => {
+    if (!loading && !user) {
+      router.push("/login");
+    }
+  }, [user, loading, router]);
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-screen">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
+      </div>
+    );
+  }
+
+  return user ? <>{children}</> : null;
+}
+</file>
+
+<file path="components/auth/signup-form.tsx">
+"use client";
+
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { useAuth } from "@/lib/auth-context";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { 
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle 
+} from "@/components/ui/card";
+import { AlertCircle } from "lucide-react";
+import Link from "next/link";
+
+export function SignUpForm() {
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+  const { signUp } = useAuth();
+  const router = useRouter();
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    // Reset error
+    setError("");
+    
+    if (password !== confirmPassword) {
+      return setError("Passwords don't match");
+    }
+    
+    if (password.length < 6) {
+      return setError("Password must be at least 6 characters");
+    }
+    
+    try {
+      setLoading(true);
+      await signUp(email, password);
+      router.push("/");
+    } catch (error: any) {
+      if (error.code === "auth/email-already-in-use") {
+        setError("Email already in use");
+      } else {
+        setError("Failed to create account: " + error.message);
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <Card className="w-full max-w-md mx-auto">
+      <CardHeader>
+        <CardTitle>Create an account</CardTitle>
+        <CardDescription>
+          Enter your email and password to create an account
+        </CardDescription>
+      </CardHeader>
+      <form onSubmit={handleSubmit}>
+        <CardContent className="space-y-4">
+          {error && (
+            <div className="bg-red-50 p-3 rounded-md flex items-center text-sm text-red-800">
+              <AlertCircle className="h-4 w-4 mr-2" />
+              {error}
+            </div>
+          )}
+          <div className="space-y-2">
+            <Label htmlFor="email">Email</Label>
+            <Input
+              id="email"
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+              placeholder="you@example.com"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="password">Password</Label>
+            <Input
+              id="password"
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+              placeholder="Create a password"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="confirmPassword">Confirm Password</Label>
+            <Input
+              id="confirmPassword"
+              type="password"
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              required
+              placeholder="Confirm your password"
+            />
+          </div>
+        </CardContent>
+        <CardFooter className="flex flex-col space-y-4">
+          <Button 
+            type="submit" 
+            className="w-full" 
+            disabled={loading}
+          >
+            {loading ? "Creating Account..." : "Create Account"}
+          </Button>
+          <p className="text-sm text-center text-muted-foreground">
+            Already have an account?{" "}
+            <Link href="/login" className="text-blue-600 hover:underline">
+              Sign in
+            </Link>
+          </p>
+        </CardFooter>
+      </form>
+    </Card>
+  );
 }
 </file>
 
@@ -6857,117 +7887,129 @@ export { Textarea }
 <file path="components/ui/toast.tsx">
 "use client"
 
-import * as React from "react"
-import * as ToastPrimitives from "@radix-ui/react-toast"
-import { cva, type VariantProps } from "class-variance-authority"
-import { X } from "lucide-react"
+import { useState, useEffect, useCallback, createContext, useContext } from 'react';
+import { X } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
-import { cn } from "@/lib/utils"
+// Toast types and interfaces
+type ToastVariant = 'default' | 'success' | 'error' | 'destructive' | 'warning';
 
-const ToastProvider = ToastPrimitives.Provider
-
-const ToastViewport = React.forwardRef<
-  React.ElementRef<typeof ToastPrimitives.Viewport>,
-  React.ComponentPropsWithoutRef<typeof ToastPrimitives.Viewport>
->(({ className, ...props }, ref) => (
-  <ToastPrimitives.Viewport
-    ref={ref}
-    className={cn(
-      "fixed top-0 z-[100] flex max-h-screen w-full flex-col-reverse p-4 sm:bottom-0 sm:right-0 sm:top-auto sm:flex-col md:max-w-[420px]",
-      className,
-    )}
-    {...props}
-  />
-))
-ToastViewport.displayName = ToastPrimitives.Viewport.displayName
-
-const toastVariants = cva(
-  "group pointer-events-auto relative flex w-full items-center justify-between space-x-4 overflow-hidden rounded-md border p-6 pr-8 shadow-lg transition-all data-[swipe=cancel]:translate-x-0 data-[swipe=end]:translate-x-[var(--radix-toast-swipe-end-x)] data-[swipe=move]:translate-x-[var(--radix-toast-swipe-move-x)] data-[swipe=move]:transition-none data-[state=open]:animate-in data-[state=closed]:animate-out data-[swipe=end]:animate-out data-[state=closed]:fade-out-80 data-[state=closed]:slide-out-to-right-full data-[state=open]:slide-in-from-top-full data-[state=open]:sm:slide-in-from-bottom-full",
-  {
-    variants: {
-      variant: {
-        default: "border bg-background text-foreground",
-        destructive: "destructive group border-destructive bg-destructive text-destructive-foreground",
-      },
-    },
-    defaultVariants: {
-      variant: "default",
-    },
-  },
-)
-
-const Toast = React.forwardRef<
-  React.ElementRef<typeof ToastPrimitives.Root>,
-  React.ComponentPropsWithoutRef<typeof ToastPrimitives.Root> & VariantProps<typeof toastVariants>
->(({ className, variant, ...props }, ref) => {
-  return <ToastPrimitives.Root ref={ref} className={cn(toastVariants({ variant }), className)} {...props} />
-})
-Toast.displayName = ToastPrimitives.Root.displayName
-
-const ToastAction = React.forwardRef<
-  React.ElementRef<typeof ToastPrimitives.Action>,
-  React.ComponentPropsWithoutRef<typeof ToastPrimitives.Action>
->(({ className, ...props }, ref) => (
-  <ToastPrimitives.Action
-    ref={ref}
-    className={cn(
-      "inline-flex h-8 shrink-0 items-center justify-center rounded-md border bg-transparent px-3 text-sm font-medium ring-offset-background transition-colors hover:bg-secondary focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 group-[.destructive]:border-muted/40 group-[.destructive]:hover:border-destructive/30 group-[.destructive]:hover:bg-destructive group-[.destructive]:hover:text-destructive-foreground group-[.destructive]:focus:ring-destructive",
-      className,
-    )}
-    {...props}
-  />
-))
-ToastAction.displayName = ToastPrimitives.Action.displayName
-
-const ToastClose = React.forwardRef<
-  React.ElementRef<typeof ToastPrimitives.Close>,
-  React.ComponentPropsWithoutRef<typeof ToastPrimitives.Close>
->(({ className, ...props }, ref) => (
-  <ToastPrimitives.Close
-    ref={ref}
-    className={cn(
-      "absolute right-2 top-2 rounded-md p-1 text-foreground/50 opacity-0 transition-opacity hover:text-foreground focus:opacity-100 focus:outline-none focus:ring-2 group-hover:opacity-100 group-[.destructive]:text-red-300 group-[.destructive]:hover:text-red-50 group-[.destructive]:focus:ring-red-400 group-[.destructive]:focus:ring-offset-red-600",
-      className,
-    )}
-    toast-close=""
-    {...props}
-  >
-    <X className="h-4 w-4" />
-  </ToastPrimitives.Close>
-))
-ToastClose.displayName = ToastPrimitives.Close.displayName
-
-const ToastTitle = React.forwardRef<
-  React.ElementRef<typeof ToastPrimitives.Title>,
-  React.ComponentPropsWithoutRef<typeof ToastPrimitives.Title>
->(({ className, ...props }, ref) => (
-  <ToastPrimitives.Title ref={ref} className={cn("text-sm font-semibold", className)} {...props} />
-))
-ToastTitle.displayName = ToastPrimitives.Title.displayName
-
-const ToastDescription = React.forwardRef<
-  React.ElementRef<typeof ToastPrimitives.Description>,
-  React.ComponentPropsWithoutRef<typeof ToastPrimitives.Description>
->(({ className, ...props }, ref) => (
-  <ToastPrimitives.Description ref={ref} className={cn("text-sm opacity-90", className)} {...props} />
-))
-ToastDescription.displayName = ToastPrimitives.Description.displayName
-
-type ToastProps = React.ComponentPropsWithoutRef<typeof Toast>
-
-type ToastActionElement = React.ReactElement<typeof ToastAction>
-
-export {
-  type ToastProps,
-  type ToastActionElement,
-  ToastProvider,
-  ToastViewport,
-  Toast,
-  ToastTitle,
-  ToastDescription,
-  ToastClose,
-  ToastAction,
+interface ToastProps {
+  title: string;
+  description?: string;
+  variant?: ToastVariant;
+  duration?: number;
 }
+
+interface ToastItem extends ToastProps {
+  id: string;
+}
+
+// Create context for toast functionality
+type ToastContextType = {
+  toast: (props: ToastProps) => string;
+  dismiss: (id: string) => void;
+  toasts: ToastItem[];
+};
+
+const ToastContext = createContext<ToastContextType | undefined>(undefined);
+
+// Toast provider component
+export function ToastProvider({ children }: { children: React.ReactNode }) {
+  const [toasts, setToasts] = useState<ToastItem[]>([]);
+
+  const toast = useCallback(({ title, description, variant = 'default', duration = 3000 }: ToastProps) => {
+    const id = Math.random().toString(36).substring(2, 9);
+    
+    setToasts((prevToasts) => [
+      ...prevToasts,
+      { id, title, description, variant, duration },
+    ]);
+
+    return id;
+  }, []);
+
+  const dismiss = useCallback((id: string) => {
+    setToasts((prevToasts) => prevToasts.filter((toast) => toast.id !== id));
+  }, []);
+
+  useEffect(() => {
+    if (toasts.length === 0) return;
+
+    const timers = toasts.map((toast) => {
+      return setTimeout(() => {
+        dismiss(toast.id);
+      }, toast.duration);
+    });
+
+    return () => {
+      timers.forEach((timer) => clearTimeout(timer));
+    };
+  }, [toasts, dismiss]);
+
+  return (
+    <ToastContext.Provider value={{ toast, dismiss, toasts }}>
+      {children}
+      <ToastContainer />
+    </ToastContext.Provider>
+  );
+}
+
+// Hook to use toast functionality
+export function useToast() {
+  const context = useContext(ToastContext);
+  
+  if (!context) {
+    throw new Error('useToast must be used within a ToastProvider');
+  }
+  
+  return context;
+}
+
+// Toast container component
+function ToastContainer() {
+  const { toasts, dismiss } = useToast();
+  
+  return (
+    <div className="fixed bottom-0 right-0 z-50 flex flex-col items-end p-4 gap-2">
+      {toasts.map((toast) => (
+        <Toast key={toast.id} {...toast} onClose={() => dismiss(toast.id)} />
+      ))}
+    </div>
+  );
+}
+
+// Individual toast component
+function Toast({ id, title, description, variant = 'default', onClose }: ToastItem & { onClose: () => void }) {
+  return (
+    <div
+      className={cn(
+        'relative flex w-full max-w-md overflow-hidden rounded-lg p-4 shadow-lg transition-all',
+        'animate-in slide-in-from-right-full',
+        {
+          'bg-white text-gray-900 dark:bg-gray-800 dark:text-gray-100': variant === 'default',
+          'bg-green-100 text-green-900 dark:bg-green-800 dark:text-green-100': variant === 'success',
+          'bg-red-100 text-red-900 dark:bg-red-800 dark:text-red-100': variant === 'error' || variant === 'destructive',
+          'bg-yellow-100 text-yellow-900 dark:bg-yellow-800 dark:text-yellow-100': variant === 'warning',
+        }
+      )}
+    >
+      <div className="flex-1">
+        <h3 className="font-medium">{title}</h3>
+        {description && <p className="mt-1 text-sm opacity-90">{description}</p>}
+      </div>
+      <button
+        onClick={onClose}
+        className="ml-4 inline-flex h-6 w-6 items-center justify-center rounded-md text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-50"
+      >
+        <X className="h-4 w-4" />
+        <span className="sr-only">Close</span>
+      </button>
+    </div>
+  );
+}
+
+export type { ToastProps };
 </file>
 
 <file path="components/ui/toaster.tsx">
@@ -7167,193 +8209,62 @@ export function useIsMobile() {
 <file path="components/ui/use-toast.ts">
 "use client"
 
-// Inspired by react-hot-toast library
 import * as React from "react"
 
-import type { ToastActionElement, ToastProps } from "@/components/ui/toast"
+type ToastVariant = 'default' | 'success' | 'error' | 'destructive' | 'warning';
 
-const TOAST_LIMIT = 1
-const TOAST_REMOVE_DELAY = 1000000
-
-type ToasterToast = ToastProps & {
-  id: string
-  title?: React.ReactNode
-  description?: React.ReactNode
-  action?: ToastActionElement
+export interface ToastProps {
+  title: string;
+  description?: string;
+  variant?: ToastVariant;
+  duration?: number;
+  action?: React.ReactNode;
+  onOpenChange?: (open: boolean) => void;
+  open?: boolean;
 }
 
-const actionTypes = {
-  ADD_TOAST: "ADD_TOAST",
-  UPDATE_TOAST: "UPDATE_TOAST",
-  DISMISS_TOAST: "DISMISS_TOAST",
-  REMOVE_TOAST: "REMOVE_TOAST",
-} as const
-
-let count = 0
-
-function genId() {
-  count = (count + 1) % Number.MAX_VALUE
-  return count.toString()
+interface ToastItem extends ToastProps {
+  id: string;
 }
 
-type ActionType = typeof actionTypes
+export function useToast() {
+  const [toasts, setToasts] = React.useState<ToastItem[]>([]);
 
-type Action =
-  | {
-      type: ActionType["ADD_TOAST"]
-      toast: ToasterToast
+  const toast = React.useCallback(({ title, description, variant = 'default', duration = 3000, ...props }: ToastProps) => {
+    const id = Math.random().toString(36).substring(2, 9);
+    
+    setToasts((prevToasts) => [
+      ...prevToasts,
+      { id, title, description, variant, duration, ...props },
+    ]);
+
+    return id;
+  }, []);
+
+  const dismiss = React.useCallback((id?: string) => {
+    if (id) {
+      setToasts((prevToasts) => prevToasts.filter((toast) => toast.id !== id));
+    } else {
+      setToasts([]);
     }
-  | {
-      type: ActionType["UPDATE_TOAST"]
-      toast: Partial<ToasterToast>
-    }
-  | {
-      type: ActionType["DISMISS_TOAST"]
-      toastId?: ToasterToast["id"]
-    }
-  | {
-      type: ActionType["REMOVE_TOAST"]
-      toastId?: ToasterToast["id"]
-    }
-
-interface State {
-  toasts: ToasterToast[]
-}
-
-const toastTimeouts = new Map<string, ReturnType<typeof setTimeout>>()
-
-const addToRemoveQueue = (toastId: string) => {
-  if (toastTimeouts.has(toastId)) {
-    return
-  }
-
-  const timeout = setTimeout(() => {
-    toastTimeouts.delete(toastId)
-    dispatch({
-      type: "REMOVE_TOAST",
-      toastId: toastId,
-    })
-  }, TOAST_REMOVE_DELAY)
-
-  toastTimeouts.set(toastId, timeout)
-}
-
-export const reducer = (state: State, action: Action): State => {
-  switch (action.type) {
-    case "ADD_TOAST":
-      return {
-        ...state,
-        toasts: [action.toast, ...state.toasts].slice(0, TOAST_LIMIT),
-      }
-
-    case "UPDATE_TOAST":
-      return {
-        ...state,
-        toasts: state.toasts.map((t) => (t.id === action.toast.id ? { ...t, ...action.toast } : t)),
-      }
-
-    case "DISMISS_TOAST": {
-      const { toastId } = action
-
-      // ! Side effects ! - This could be extracted into a dismissToast() action,
-      // but I'll keep it here for simplicity
-      if (toastId) {
-        addToRemoveQueue(toastId)
-      } else {
-        state.toasts.forEach((toast) => {
-          addToRemoveQueue(toast.id)
-        })
-      }
-
-      return {
-        ...state,
-        toasts: state.toasts.map((t) =>
-          t.id === toastId || toastId === undefined
-            ? {
-                ...t,
-                open: false,
-              }
-            : t,
-        ),
-      }
-    }
-    case "REMOVE_TOAST":
-      if (action.toastId === undefined) {
-        return {
-          ...state,
-          toasts: [],
-        }
-      }
-      return {
-        ...state,
-        toasts: state.toasts.filter((t) => t.id !== action.toastId),
-      }
-  }
-}
-
-const listeners: Array<(state: State) => void> = []
-
-let memoryState: State = { toasts: [] }
-
-function dispatch(action: Action) {
-  memoryState = reducer(memoryState, action)
-  listeners.forEach((listener) => {
-    listener(memoryState)
-  })
-}
-
-type Toast = Omit<ToasterToast, "id">
-
-function toast({ ...props }: Toast) {
-  const id = genId()
-
-  const update = (props: ToasterToast) =>
-    dispatch({
-      type: "UPDATE_TOAST",
-      toast: { ...props, id },
-    })
-  const dismiss = () => dispatch({ type: "DISMISS_TOAST", toastId: id })
-
-  dispatch({
-    type: "ADD_TOAST",
-    toast: {
-      ...props,
-      id,
-      open: true,
-      onOpenChange: (open) => {
-        if (!open) dismiss()
-      },
-    },
-  })
-
-  return {
-    id: id,
-    dismiss,
-    update,
-  }
-}
-
-function useToast() {
-  const [state, setState] = React.useState<State>(memoryState)
+  }, []);
 
   React.useEffect(() => {
-    listeners.push(setState)
+    if (toasts.length === 0) return;
+
+    const timers = toasts.map((toast) => {
+      return setTimeout(() => {
+        dismiss(toast.id);
+      }, toast.duration);
+    });
+
     return () => {
-      const index = listeners.indexOf(setState)
-      if (index > -1) {
-        listeners.splice(index, 1)
-      }
-    }
-  }, [state])
+      timers.forEach((timer) => clearTimeout(timer));
+    };
+  }, [toasts, dismiss]);
 
-  return {
-    ...state,
-    toast,
-    dismiss: (toastId?: string) => dispatch({ type: "DISMISS_TOAST", toastId }),
-  }
+  return { toast, dismiss, toasts };
 }
-
-export { useToast, toast }
 </file>
 
 <file path="components/create-user-dialog.tsx">
@@ -7543,20 +8454,6 @@ export function Header() {
       </div>
     </header>
   )
-}
-</file>
-
-<file path="components/theme-provider.tsx">
-'use client'
-
-import * as React from 'react'
-import {
-  ThemeProvider as NextThemesProvider,
-  type ThemeProviderProps,
-} from 'next-themes'
-
-export function ThemeProvider({ children, ...props }: ThemeProviderProps) {
-  return <NextThemesProvider {...props}>{children}</NextThemesProvider>
 }
 </file>
 
@@ -7779,6 +8676,102 @@ function useToast() {
 export { useToast, toast }
 </file>
 
+<file path="lib/auth-context.tsx">
+"use client";
+
+import React, { createContext, useContext, useEffect, useState } from "react";
+import { 
+  User, 
+  createUserWithEmailAndPassword, 
+  onAuthStateChanged, 
+  signInWithEmailAndPassword, 
+  signOut,
+  sendPasswordResetEmail 
+} from "firebase/auth";
+import { auth } from "./firebase";
+
+interface AuthContextProps {
+  user: User | null;
+  loading: boolean;
+  signUp: (email: string, password: string) => Promise<void>;
+  signIn: (email: string, password: string) => Promise<void>;
+  logout: () => Promise<void>;
+  resetPassword: (email: string) => Promise<void>;
+}
+
+const AuthContext = createContext<AuthContextProps | undefined>(undefined);
+
+export function AuthProvider({ children }: { children: React.ReactNode }) {
+  const [user, setUser] = useState<User | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      setUser(user);
+      setLoading(false);
+    });
+
+    return () => unsubscribe();
+  }, []);
+
+  const signUp = async (email: string, password: string) => {
+    await createUserWithEmailAndPassword(auth, email, password);
+  };
+
+  const signIn = async (email: string, password: string) => {
+    await signInWithEmailAndPassword(auth, email, password);
+  };
+
+  const logout = async () => {
+    await signOut(auth);
+  };
+
+  const resetPassword = async (email: string) => {
+    await sendPasswordResetEmail(auth, email);
+  };
+
+  return (
+    <AuthContext.Provider value={{ user, loading, signUp, signIn, logout, resetPassword }}>
+      {children}
+    </AuthContext.Provider>
+  );
+}
+
+export function useAuth() {
+  const context = useContext(AuthContext);
+  if (context === undefined) {
+    throw new Error("useAuth must be used within an AuthProvider");
+  }
+  return context;
+}
+</file>
+
+<file path="lib/firebase.ts">
+// Import the functions you need from the SDKs you need
+import { initializeApp, getApps } from "firebase/app";
+import { getAuth } from "firebase/auth";
+import { getFirestore } from "firebase/firestore";
+
+// Your web app's Firebase configuration
+// For Firebase JS SDK v7.20.0 and later, measurementId is optional
+const firebaseConfig = {
+  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
+  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
+  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
+  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
+  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
+  measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID,
+};
+
+// Initialize Firebase
+const app = getApps().length > 0 ? getApps()[0] : initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
+
+export { app, auth, db };
+</file>
+
 <file path="lib/utils.ts">
 import { type ClassValue, clsx } from "clsx"
 import { twMerge } from "tailwind-merge"
@@ -7794,103 +8787,6 @@ export function cn(...inputs: ClassValue[]) {
 
 <file path="public/placeholder.svg">
 <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="1200" fill="none"><rect width="1200" height="1200" fill="#EAEAEA" rx="3"/><g opacity=".5"><g opacity=".5"><path fill="#FAFAFA" d="M600.709 736.5c-75.454 0-136.621-61.167-136.621-136.62 0-75.454 61.167-136.621 136.621-136.621 75.453 0 136.62 61.167 136.62 136.621 0 75.453-61.167 136.62-136.62 136.62Z"/><path stroke="#C9C9C9" stroke-width="2.418" d="M600.709 736.5c-75.454 0-136.621-61.167-136.621-136.62 0-75.454 61.167-136.621 136.621-136.621 75.453 0 136.62 61.167 136.62 136.621 0 75.453-61.167 136.62-136.62 136.62Z"/></g><path stroke="url(#a)" stroke-width="2.418" d="M0-1.209h553.581" transform="scale(1 -1) rotate(45 1163.11 91.165)"/><path stroke="url(#b)" stroke-width="2.418" d="M404.846 598.671h391.726"/><path stroke="url(#c)" stroke-width="2.418" d="M599.5 795.742V404.017"/><path stroke="url(#d)" stroke-width="2.418" d="m795.717 796.597-391.441-391.44"/><path fill="#fff" d="M600.709 656.704c-31.384 0-56.825-25.441-56.825-56.824 0-31.384 25.441-56.825 56.825-56.825 31.383 0 56.824 25.441 56.824 56.825 0 31.383-25.441 56.824-56.824 56.824Z"/><g clip-path="url(#e)"><path fill="#666" fill-rule="evenodd" d="M616.426 586.58h-31.434v16.176l3.553-3.554.531-.531h9.068l.074-.074 8.463-8.463h2.565l7.18 7.181V586.58Zm-15.715 14.654 3.698 3.699 1.283 1.282-2.565 2.565-1.282-1.283-5.2-5.199h-6.066l-5.514 5.514-.073.073v2.876a2.418 2.418 0 0 0 2.418 2.418h26.598a2.418 2.418 0 0 0 2.418-2.418v-8.317l-8.463-8.463-7.181 7.181-.071.072Zm-19.347 5.442v4.085a6.045 6.045 0 0 0 6.046 6.045h26.598a6.044 6.044 0 0 0 6.045-6.045v-7.108l1.356-1.355-1.282-1.283-.074-.073v-17.989h-38.689v23.43l-.146.146.146.147Z" clip-rule="evenodd"/></g><path stroke="#C9C9C9" stroke-width="2.418" d="M600.709 656.704c-31.384 0-56.825-25.441-56.825-56.824 0-31.384 25.441-56.825 56.825-56.825 31.383 0 56.824 25.441 56.824 56.825 0 31.383-25.441 56.824-56.824 56.824Z"/></g><defs><linearGradient id="a" x1="554.061" x2="-.48" y1=".083" y2=".087" gradientUnits="userSpaceOnUse"><stop stop-color="#C9C9C9" stop-opacity="0"/><stop offset=".208" stop-color="#C9C9C9"/><stop offset=".792" stop-color="#C9C9C9"/><stop offset="1" stop-color="#C9C9C9" stop-opacity="0"/></linearGradient><linearGradient id="b" x1="796.912" x2="404.507" y1="599.963" y2="599.965" gradientUnits="userSpaceOnUse"><stop stop-color="#C9C9C9" stop-opacity="0"/><stop offset=".208" stop-color="#C9C9C9"/><stop offset=".792" stop-color="#C9C9C9"/><stop offset="1" stop-color="#C9C9C9" stop-opacity="0"/></linearGradient><linearGradient id="c" x1="600.792" x2="600.794" y1="403.677" y2="796.082" gradientUnits="userSpaceOnUse"><stop stop-color="#C9C9C9" stop-opacity="0"/><stop offset=".208" stop-color="#C9C9C9"/><stop offset=".792" stop-color="#C9C9C9"/><stop offset="1" stop-color="#C9C9C9" stop-opacity="0"/></linearGradient><linearGradient id="d" x1="404.85" x2="796.972" y1="403.903" y2="796.02" gradientUnits="userSpaceOnUse"><stop stop-color="#C9C9C9" stop-opacity="0"/><stop offset=".208" stop-color="#C9C9C9"/><stop offset=".792" stop-color="#C9C9C9"/><stop offset="1" stop-color="#C9C9C9" stop-opacity="0"/></linearGradient><clipPath id="e"><path fill="#fff" d="M581.364 580.535h38.689v38.689h-38.689z"/></clipPath></defs></svg>
-</file>
-
-<file path="styles/globals.css">
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
-
-body {
-  font-family: Arial, Helvetica, sans-serif;
-}
-
-@layer utilities {
-  .text-balance {
-    text-wrap: balance;
-  }
-}
-
-@layer base {
-  :root {
-    --background: 0 0% 100%;
-    --foreground: 0 0% 3.9%;
-    --card: 0 0% 100%;
-    --card-foreground: 0 0% 3.9%;
-    --popover: 0 0% 100%;
-    --popover-foreground: 0 0% 3.9%;
-    --primary: 0 0% 9%;
-    --primary-foreground: 0 0% 98%;
-    --secondary: 0 0% 96.1%;
-    --secondary-foreground: 0 0% 9%;
-    --muted: 0 0% 96.1%;
-    --muted-foreground: 0 0% 45.1%;
-    --accent: 0 0% 96.1%;
-    --accent-foreground: 0 0% 9%;
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 0 0% 98%;
-    --border: 0 0% 89.8%;
-    --input: 0 0% 89.8%;
-    --ring: 0 0% 3.9%;
-    --chart-1: 12 76% 61%;
-    --chart-2: 173 58% 39%;
-    --chart-3: 197 37% 24%;
-    --chart-4: 43 74% 66%;
-    --chart-5: 27 87% 67%;
-    --radius: 0.5rem;
-    --sidebar-background: 0 0% 98%;
-    --sidebar-foreground: 240 5.3% 26.1%;
-    --sidebar-primary: 240 5.9% 10%;
-    --sidebar-primary-foreground: 0 0% 98%;
-    --sidebar-accent: 240 4.8% 95.9%;
-    --sidebar-accent-foreground: 240 5.9% 10%;
-    --sidebar-border: 220 13% 91%;
-    --sidebar-ring: 217.2 91.2% 59.8%;
-  }
-  .dark {
-    --background: 0 0% 3.9%;
-    --foreground: 0 0% 98%;
-    --card: 0 0% 3.9%;
-    --card-foreground: 0 0% 98%;
-    --popover: 0 0% 3.9%;
-    --popover-foreground: 0 0% 98%;
-    --primary: 0 0% 98%;
-    --primary-foreground: 0 0% 9%;
-    --secondary: 0 0% 14.9%;
-    --secondary-foreground: 0 0% 98%;
-    --muted: 0 0% 14.9%;
-    --muted-foreground: 0 0% 63.9%;
-    --accent: 0 0% 14.9%;
-    --accent-foreground: 0 0% 98%;
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 0 0% 98%;
-    --border: 0 0% 14.9%;
-    --input: 0 0% 14.9%;
-    --ring: 0 0% 83.1%;
-    --chart-1: 220 70% 50%;
-    --chart-2: 160 60% 45%;
-    --chart-3: 30 80% 55%;
-    --chart-4: 280 65% 60%;
-    --chart-5: 340 75% 55%;
-    --sidebar-background: 240 5.9% 10%;
-    --sidebar-foreground: 240 4.8% 95.9%;
-    --sidebar-primary: 224.3 76.3% 48%;
-    --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 240 3.7% 15.9%;
-    --sidebar-accent-foreground: 240 4.8% 95.9%;
-    --sidebar-border: 240 3.7% 15.9%;
-    --sidebar-ring: 217.2 91.2% 59.8%;
-  }
-}
-
-@layer base {
-  * {
-    @apply border-border;
-  }
-  body {
-    @apply bg-background text-foreground;
-  }
-}
 </file>
 
 <file path=".gitignore">
@@ -7999,79 +8895,6 @@ if (userConfig) {
 }
 
 export default nextConfig
-</file>
-
-<file path="package.json">
-{
-  "name": "my-v0-project",
-  "version": "0.1.0",
-  "private": true,
-  "scripts": {
-    "dev": "next dev",
-    "build": "next build",
-    "start": "next start",
-    "lint": "next lint"
-  },
-  "dependencies": {
-    "@hookform/resolvers": "^3.9.1",
-    "@radix-ui/react-accordion": "^1.2.2",
-    "@radix-ui/react-alert-dialog": "latest",
-    "@radix-ui/react-aspect-ratio": "^1.1.1",
-    "@radix-ui/react-avatar": "^1.1.2",
-    "@radix-ui/react-checkbox": "latest",
-    "@radix-ui/react-collapsible": "^1.1.2",
-    "@radix-ui/react-context-menu": "^2.2.4",
-    "@radix-ui/react-dialog": "latest",
-    "@radix-ui/react-dropdown-menu": "^2.1.4",
-    "@radix-ui/react-hover-card": "^1.1.4",
-    "@radix-ui/react-label": "^2.1.1",
-    "@radix-ui/react-menubar": "^1.1.4",
-    "@radix-ui/react-navigation-menu": "^1.2.3",
-    "@radix-ui/react-popover": "latest",
-    "@radix-ui/react-progress": "latest",
-    "@radix-ui/react-radio-group": "^1.2.2",
-    "@radix-ui/react-scroll-area": "^1.2.2",
-    "@radix-ui/react-select": "latest",
-    "@radix-ui/react-separator": "latest",
-    "@radix-ui/react-slider": "^1.2.2",
-    "@radix-ui/react-slot": "^1.1.1",
-    "@radix-ui/react-switch": "^1.1.2",
-    "@radix-ui/react-tabs": "^1.1.2",
-    "@radix-ui/react-toast": "latest",
-    "@radix-ui/react-toggle": "^1.1.1",
-    "@radix-ui/react-toggle-group": "^1.1.1",
-    "@radix-ui/react-tooltip": "^1.1.6",
-    "autoprefixer": "^10.4.20",
-    "class-variance-authority": "^0.7.1",
-    "clsx": "^2.1.1",
-    "cmdk": "1.0.4",
-    "date-fns": "latest",
-    "embla-carousel-react": "8.5.1",
-    "input-otp": "1.4.1",
-    "lucide-react": "^0.454.0",
-    "next": "15.2.4",
-    "next-themes": "^0.4.4",
-    "react": "^19",
-    "react-day-picker": "latest",
-    "react-dom": "^19",
-    "react-hook-form": "^7.54.1",
-    "react-resizable-panels": "^2.1.7",
-    "recharts": "latest",
-    "sonner": "^1.7.1",
-    "tailwind-merge": "^2.5.5",
-    "tailwindcss-animate": "^1.0.7",
-    "vaul": "^0.9.6",
-    "zod": "^3.24.1"
-  },
-  "devDependencies": {
-    "@types/node": "^22",
-    "@types/react": "^19",
-    "@types/react-dom": "^19",
-    "postcss": "^8",
-    "tailwindcss": "^3.4.17",
-    "typescript": "^5"
-  }
-}
 </file>
 
 <file path="postcss.config.mjs">
@@ -8195,23 +9018,538 @@ module.exports = {
 }
 </file>
 
+<file path="app/home.tsx">
+"use client";
+
+import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { Book, Settings, List, WifiOff, LogOut } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { useAuth } from "@/lib/auth-context";
+
+export default function HomePage() {
+  const router = useRouter();
+  const { logout } = useAuth();
+  const [isOnline, setIsOnline] = useState(true);
+
+  // Check online status
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+
+    // Set initial status
+    setIsOnline(navigator.onLine);
+
+    // Add event listeners
+    window.addEventListener("online", handleOnline);
+    window.addEventListener("offline", handleOffline);
+
+    // Clean up
+    return () => {
+      window.removeEventListener("online", handleOnline);
+      window.removeEventListener("offline", handleOffline);
+    };
+  }, []);
+
+  const handleLogout = async () => {
+    try {
+      await logout();
+      router.push("/landing");
+    } catch (error) {
+      console.error("Failed to log out:", error);
+    }
+  };
+
+  return (
+    <div className="flex flex-col min-h-screen bg-gray-50 dark:bg-gray-900">
+      <header className="bg-white dark:bg-gray-950 border-b dark:border-gray-800 py-4">
+        <div className="container mx-auto px-4 flex justify-between items-center">
+          <div className="flex items-center space-x-2">
+            <Book className="h-6 w-6 text-emerald-600" />
+            <span className="text-xl font-bold">Journal</span>
+          </div>
+          <Button variant="ghost" size="sm" onClick={handleLogout}>
+            <LogOut className="h-4 w-4 mr-2" />
+            Logout
+          </Button>
+        </div>
+      </header>
+
+      <main className="flex-1 flex flex-col items-center justify-center p-6 space-y-8">
+        {!isOnline && (
+          <div className="flex items-center justify-center p-4 mb-4 rounded-lg bg-amber-50 dark:bg-amber-900/20 text-amber-800 dark:text-amber-200">
+            <WifiOff className="h-5 w-5 mr-2" />
+            <p>Connect to the internet to digitize entries.</p>
+          </div>
+        )}
+
+        <div className="grid gap-6 w-full max-w-md">
+          <Button
+            size="lg"
+            className="h-24 text-lg bg-emerald-600 hover:bg-emerald-700 dark:bg-emerald-700 dark:hover:bg-emerald-800"
+            onClick={() => router.push("/new-entry")}
+            disabled={!isOnline}
+          >
+            <Book className="mr-2 h-6 w-6" />
+            New Entry
+          </Button>
+
+          <Button
+            size="lg"
+            className="h-24 text-lg bg-blue-600 hover:bg-blue-700 dark:bg-blue-700 dark:hover:bg-blue-800"
+            onClick={() => router.push("/entries")}
+          >
+            <List className="mr-2 h-6 w-6" />
+            View Entries
+          </Button>
+
+          <Button
+            size="lg"
+            className="h-24 text-lg bg-purple-600 hover:bg-purple-700 dark:bg-purple-700 dark:hover:bg-purple-800"
+            onClick={() => router.push("/settings")}
+          >
+            <Settings className="mr-2 h-6 w-6" />
+            Settings
+          </Button>
+        </div>
+      </main>
+
+      <footer className="border-t dark:border-gray-800 py-4">
+        <div className="container mx-auto px-4 text-center text-gray-500 dark:text-gray-400">
+          <p>© {new Date().getFullYear()} Journal App</p>
+        </div>
+      </footer>
+    </div>
+  );
+}
+</file>
+
+<file path="app/page.tsx">
+"use client"
+
+import { useEffect } from "react"
+import { useRouter } from "next/navigation"
+import { useAuth } from "@/lib/auth-context"
+import { ProtectedRoute } from "@/components/auth/protected-route"
+import HomePage from "./home"
+
+export default function RootPage() {
+  const router = useRouter()
+  const { user, loading } = useAuth()
+
+  useEffect(() => {
+    // If not authenticated and not loading, redirect to landing page
+    if (!loading && !user) {
+      router.push("/landing")
+    }
+  }, [user, loading, router])
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-screen">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
+      </div>
+    )
+  }
+
+  return (
+    <ProtectedRoute>
+      <HomePage />
+    </ProtectedRoute>
+  )
+}
+</file>
+
+<file path="styles/globals.css">
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+}
+
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 222.2 84% 4.9%;
+    --card: 0 0% 100%;
+    --card-foreground: 222.2 84% 4.9%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 222.2 84% 4.9%;
+    --primary: 142 76% 36%;
+    --primary-foreground: 0 0% 98%;
+    --secondary: 210 40% 96.1%;
+    --secondary-foreground: 222.2 47.4% 11.2%;
+    --muted: 210 40% 96.1%;
+    --muted-foreground: 215.4 16.3% 46.9%;
+    --accent: 210 40% 96.1%;
+    --accent-foreground: 222.2 47.4% 11.2%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 214.3 31.8% 91.4%;
+    --input: 214.3 31.8% 91.4%;
+    --ring: 142 76% 36%;
+    --chart-1: 12 76% 61%;
+    --chart-2: 173 58% 39%;
+    --chart-3: 197 37% 24%;
+    --chart-4: 43 74% 66%;
+    --chart-5: 27 87% 67%;
+    --radius: 0.5rem;
+    --sidebar-background: 0 0% 98%;
+    --sidebar-foreground: 240 5.3% 26.1%;
+    --sidebar-primary: 240 5.9% 10%;
+    --sidebar-primary-foreground: 0 0% 98%;
+    --sidebar-accent: 240 4.8% 95.9%;
+    --sidebar-accent-foreground: 240 5.9% 10%;
+    --sidebar-border: 220 13% 91%;
+    --sidebar-ring: 217.2 91.2% 59.8%;
+  }
+  .dark {
+    --background: 222.2 84% 4.9%;
+    --foreground: 210 40% 98%;
+    --card: 222.2 84% 4.9%;
+    --card-foreground: 210 40% 98%;
+    --popover: 222.2 84% 4.9%;
+    --popover-foreground: 210 40% 98%;
+    --primary: 142 70% 30%;
+    --primary-foreground: 210 40% 98%;
+    --secondary: 217.2 32.6% 17.5%;
+    --secondary-foreground: 210 40% 98%;
+    --muted: 217.2 32.6% 17.5%;
+    --muted-foreground: 215 20.2% 65.1%;
+    --accent: 217.2 32.6% 17.5%;
+    --accent-foreground: 210 40% 98%;
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 217.2 32.6% 17.5%;
+    --input: 217.2 32.6% 17.5%;
+    --ring: 142 76% 36%;
+    --chart-1: 220 70% 50%;
+    --chart-2: 160 60% 45%;
+    --chart-3: 30 80% 55%;
+    --chart-4: 280 65% 60%;
+    --chart-5: 340 75% 55%;
+    --sidebar-background: 240 5.9% 10%;
+    --sidebar-foreground: 240 4.8% 95.9%;
+    --sidebar-primary: 224.3 76.3% 48%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 240 3.7% 15.9%;
+    --sidebar-accent-foreground: 240 4.8% 95.9%;
+    --sidebar-border: 240 3.7% 15.9%;
+    --sidebar-ring: 217.2 91.2% 59.8%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+  .no-transition * {
+    transition: none !important;
+  }
+}
+</file>
+
+<file path="package.json">
+{
+  "name": "my-v0-project",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint"
+  },
+  "dependencies": {
+    "@hookform/resolvers": "^3.9.1",
+    "@radix-ui/react-accordion": "^1.2.2",
+    "@radix-ui/react-alert-dialog": "latest",
+    "@radix-ui/react-aspect-ratio": "^1.1.1",
+    "@radix-ui/react-avatar": "^1.1.2",
+    "@radix-ui/react-checkbox": "latest",
+    "@radix-ui/react-collapsible": "^1.1.2",
+    "@radix-ui/react-context-menu": "^2.2.4",
+    "@radix-ui/react-dialog": "latest",
+    "@radix-ui/react-dropdown-menu": "^2.1.4",
+    "@radix-ui/react-hover-card": "^1.1.4",
+    "@radix-ui/react-label": "^2.1.1",
+    "@radix-ui/react-menubar": "^1.1.4",
+    "@radix-ui/react-navigation-menu": "^1.2.3",
+    "@radix-ui/react-popover": "latest",
+    "@radix-ui/react-progress": "latest",
+    "@radix-ui/react-radio-group": "^1.2.2",
+    "@radix-ui/react-scroll-area": "^1.2.2",
+    "@radix-ui/react-select": "latest",
+    "@radix-ui/react-separator": "latest",
+    "@radix-ui/react-slider": "^1.2.2",
+    "@radix-ui/react-slot": "^1.1.1",
+    "@radix-ui/react-switch": "^1.1.2",
+    "@radix-ui/react-tabs": "^1.1.2",
+    "@radix-ui/react-toast": "latest",
+    "@radix-ui/react-toggle": "^1.1.1",
+    "@radix-ui/react-toggle-group": "^1.1.1",
+    "@radix-ui/react-tooltip": "^1.1.6",
+    "autoprefixer": "^10.4.20",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "cmdk": "1.0.4",
+    "date-fns": "latest",
+    "embla-carousel-react": "8.5.1",
+    "firebase": "^11.6.0",
+    "input-otp": "1.4.1",
+    "lucide-react": "^0.454.0",
+    "next": "15.2.4",
+    "next-themes": "^0.4.4",
+    "openai": "^4.95.0",
+    "react": "^19",
+    "react-day-picker": "latest",
+    "react-dom": "^19",
+    "react-hook-form": "^7.54.1",
+    "react-resizable-panels": "^2.1.7",
+    "recharts": "latest",
+    "sonner": "^1.7.1",
+    "tailwind-merge": "^2.5.5",
+    "tailwindcss-animate": "^1.0.7",
+    "vaul": "^0.9.6",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "postcss": "^8",
+    "tailwindcss": "^3.4.17",
+    "typescript": "^5"
+  }
+}
+</file>
+
+<file path="app/layout.tsx">
+import "@/styles/globals.css";
+import type { Metadata } from "next";
+import { Inter as FontSans } from "next/font/google";
+import { cn } from "@/lib/utils";
+import { ThemeProvider } from "@/components/theme-provider";
+import { AuthProvider } from "@/lib/auth-context";
+import { ToastProvider } from "@/components/ui/toast";
+
+const fontSans = FontSans({
+  subsets: ["latin"],
+  variable: "--font-sans",
+});
+
+export const metadata: Metadata = {
+  title: "Journal App",
+  description: "Digitize your journal entries",
+};
+
+export default function RootLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  return (
+    <html lang="en" suppressHydrationWarning>
+      <body
+        className={cn(
+          "min-h-screen bg-background font-sans antialiased",
+          fontSans.variable
+        )}
+      >
+        <ThemeProvider
+          attribute="class"
+          defaultTheme="system"
+          enableSystem
+          disableTransitionOnChange
+        >
+          <AuthProvider>
+            <ToastProvider>
+              {children}
+            </ToastProvider>
+          </AuthProvider>
+        </ThemeProvider>
+      </body>
+    </html>
+  );
+}
+</file>
+
+<file path="components/theme-provider.tsx">
+"use client";
+
+import { createContext, useContext, useEffect, useState } from "react";
+
+type Theme = "dark" | "light" | "system";
+
+type ThemeProviderProps = {
+  children: React.ReactNode;
+  defaultTheme?: Theme;
+  storageKey?: string;
+  attribute?: string;
+  enableSystem?: boolean;
+  disableTransitionOnChange?: boolean;
+};
+
+type ThemeProviderState = {
+  theme: Theme;
+  setTheme: (theme: Theme) => void;
+};
+
+const ThemeProviderContext = createContext<ThemeProviderState | undefined>(
+  undefined
+);
+
+export function ThemeProvider({
+  children,
+  defaultTheme = "system",
+  storageKey = "theme",
+  attribute = "data-theme",
+  enableSystem = true,
+  disableTransitionOnChange = false,
+}: ThemeProviderProps) {
+  const [theme, setTheme] = useState<Theme>(defaultTheme);
+  
+  // Initialize theme state from localStorage, but only on the client
+  useEffect(() => {
+    const storedTheme = typeof window !== 'undefined' 
+      ? localStorage.getItem(storageKey) as Theme 
+      : null;
+      
+    if (storedTheme) {
+      setTheme(storedTheme);
+    }
+  }, [storageKey]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    
+    const root = window.document.documentElement;
+
+    root.classList.remove("light", "dark");
+
+    if (disableTransitionOnChange) {
+      root.classList.add("no-transition");
+    }
+
+    if (theme === "system" && enableSystem) {
+      const systemTheme = window.matchMedia("(prefers-color-scheme: dark)")
+        .matches
+        ? "dark"
+        : "light";
+
+      root.classList.add(systemTheme);
+      root.setAttribute(attribute, systemTheme);
+    } else {
+      root.classList.add(theme);
+      root.setAttribute(attribute, theme);
+    }
+
+    if (disableTransitionOnChange) {
+      // Force a reflow
+      const _ = root.offsetHeight;
+      // Remove the transition class
+      root.classList.remove("no-transition");
+    }
+  }, [theme, attribute, enableSystem, disableTransitionOnChange]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || !enableSystem) return;
+    
+    const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
+    
+    const handleChange = () => {
+      if (theme === "system") {
+        const root = window.document.documentElement;
+        const systemTheme = mediaQuery.matches ? "dark" : "light";
+        
+        root.classList.remove("light", "dark");
+        root.classList.add(systemTheme);
+        root.setAttribute(attribute, systemTheme);
+      }
+    };
+    
+    mediaQuery.addEventListener("change", handleChange);
+    
+    return () => mediaQuery.removeEventListener("change", handleChange);
+  }, [theme, attribute, enableSystem]);
+
+  const value = {
+    theme,
+    setTheme: (newTheme: Theme) => {
+      if (typeof window !== 'undefined') {
+        localStorage.setItem(storageKey, newTheme);
+      }
+      setTheme(newTheme);
+    },
+  };
+
+  return (
+    <ThemeProviderContext.Provider value={value}>
+      {children}
+    </ThemeProviderContext.Provider>
+  );
+}
+
+export function useTheme() {
+  const context = useContext(ThemeProviderContext);
+
+  if (context === undefined) {
+    throw new Error("useTheme must be used within a ThemeProvider");
+  }
+
+  return context;
+}
+</file>
+
 <file path="app/new-entry/page.tsx">
 "use client"
 
-import { useState, useRef } from "react"
+import { useState, useRef, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { X, Upload, Camera } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
+import { useAuth } from "@/lib/auth-context"
 
 export default function UploadScreen() {
   const router = useRouter()
+  const { user } = useAuth()
   const fileInputRef = useRef<HTMLInputElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const [pageCount, setPageCount] = useState(1)
   const [capturedImages, setCapturedImages] = useState<string[]>([])
   const [showAddAnother, setShowAddAnother] = useState(false)
   const [currentImage, setCurrentImage] = useState<string | null>(null)
+
+  // Load existing images from localStorage if any
+  useEffect(() => {
+    const storedImages = localStorage.getItem('capturedImages')
+    if (storedImages) {
+      try {
+        const images = JSON.parse(storedImages)
+        if (Array.isArray(images) && images.length > 0) {
+          setCapturedImages(images)
+          setPageCount(images.length)
+          // Don't show Add Another automatically when loading from storage
+        }
+      } catch (error) {
+        console.error('Error loading images from localStorage:', error)
+      }
+    }
+  }, [])
 
   // Handle file selection
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -8239,7 +9577,11 @@ export default function UploadScreen() {
   // Process the image once selected
   const processImage = (imageDataUrl: string) => {
     // Add to captured images array
-    setCapturedImages([...capturedImages, imageDataUrl])
+    const newCapturedImages = [...capturedImages, imageDataUrl]
+    setCapturedImages(newCapturedImages)
+    
+    // Store in localStorage for persistence
+    localStorage.setItem('capturedImages', JSON.stringify(newCapturedImages))
     
     // Show "Add Another Page" option
     setShowAddAnother(true)
@@ -8264,9 +9606,8 @@ export default function UploadScreen() {
 
   // Continue to preview screen
   const continueToPreview = () => {
-    // In a real app, you would pass the captured images to the next screen
-    // For now, we'll just navigate and log the number of images
-    console.log(`Captured ${capturedImages.length} images`)
+    // Save captured images to localStorage and navigate to preview
+    localStorage.setItem('capturedImages', JSON.stringify(capturedImages))
     router.push("/preview")
   }
 

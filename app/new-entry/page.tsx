@@ -1,19 +1,38 @@
 "use client"
 
-import { useState, useRef } from "react"
+import { useState, useRef, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { X, Upload, Camera } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
+import { useAuth } from "@/lib/auth-context"
 
 export default function UploadScreen() {
   const router = useRouter()
+  const { user } = useAuth()
   const fileInputRef = useRef<HTMLInputElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const [pageCount, setPageCount] = useState(1)
   const [capturedImages, setCapturedImages] = useState<string[]>([])
   const [showAddAnother, setShowAddAnother] = useState(false)
   const [currentImage, setCurrentImage] = useState<string | null>(null)
+
+  // Load existing images from localStorage if any
+  useEffect(() => {
+    const storedImages = localStorage.getItem('capturedImages')
+    if (storedImages) {
+      try {
+        const images = JSON.parse(storedImages)
+        if (Array.isArray(images) && images.length > 0) {
+          setCapturedImages(images)
+          setPageCount(images.length)
+          // Don't show Add Another automatically when loading from storage
+        }
+      } catch (error) {
+        console.error('Error loading images from localStorage:', error)
+      }
+    }
+  }, [])
 
   // Handle file selection
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -41,7 +60,11 @@ export default function UploadScreen() {
   // Process the image once selected
   const processImage = (imageDataUrl: string) => {
     // Add to captured images array
-    setCapturedImages([...capturedImages, imageDataUrl])
+    const newCapturedImages = [...capturedImages, imageDataUrl]
+    setCapturedImages(newCapturedImages)
+    
+    // Store in localStorage for persistence
+    localStorage.setItem('capturedImages', JSON.stringify(newCapturedImages))
     
     // Show "Add Another Page" option
     setShowAddAnother(true)
@@ -66,9 +89,8 @@ export default function UploadScreen() {
 
   // Continue to preview screen
   const continueToPreview = () => {
-    // In a real app, you would pass the captured images to the next screen
-    // For now, we'll just navigate and log the number of images
-    console.log(`Captured ${capturedImages.length} images`)
+    // Save captured images to localStorage and navigate to preview
+    localStorage.setItem('capturedImages', JSON.stringify(capturedImages))
     router.push("/preview")
   }
 

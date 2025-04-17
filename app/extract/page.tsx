@@ -8,19 +8,15 @@ import { ArrowLeft, Save, RefreshCw, Edit, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { cn } from "@/lib/utils"
-
-// Mock OCR result with some "errors" to demonstrate highlighting
-const mockOcrResult = {
-  text: "Today I woke up feeling [energized] and ready to tackle the day. My first meeting went well, though there were some [concems] about the timeline. I need to follow up with Sarah about the project [deliverables] by Friday.\n\nThings to remember:\n- Buy groceries\n- Schedule dentist appointment\n- Finish reading chapter 5",
-  errorRanges: [
-    { start: 27, end: 38 }, // [energized]
-    { start: 107, end: 116 }, // [concems]
-    { start: 162, end: 175 }, // [deliverables]
-  ],
-}
+import { useToast } from "@/components/ui/use-toast"
+import { imageService } from "@/lib/image-service"
+import { useAuth } from "@/lib/auth-context"
+import { journalService } from "@/lib/journal-service"
 
 export default function TextExtractionScreen() {
   const router = useRouter()
+  const { toast } = useToast()
+  const { user } = useAuth()
   const [extractedText, setExtractedText] = useState("")
   const [isLoading, setIsLoading] = useState(true)
   const [ocrFailed, setOcrFailed] = useState(false)
@@ -28,32 +24,48 @@ export default function TextExtractionScreen() {
   const [statusMessage, setStatusMessage] = useState("Extracting text...")
   const textAreaRef = useRef<HTMLTextAreaElement>(null)
   const [highlightedText, setHighlightedText] = useState<React.ReactNode>(null)
+  const [currentImage, setCurrentImage] = useState<string | null>(null)
 
-  // Simulate OCR process
+  // Process the image using OpenAI API
   useEffect(() => {
-    const simulateOcr = async () => {
+    const extractTextFromImage = async () => {
+      // Get the current image from localStorage
+      const storedImage = localStorage.getItem('currentImage')
+      if (!storedImage) {
+        setOcrFailed(true)
+        setStatusMessage("No image found to process")
+        setIsLoading(false)
+        return
+      }
+
+      setCurrentImage(storedImage)
       setIsLoading(true)
       setStatusMessage("Extracting text...")
 
-      // Simulate API call delay
-      await new Promise((resolve) => setTimeout(resolve, 2500))
+      try {
+        // Call the API to process the image
+        const result = await imageService.processImage(storedImage)
 
-      // Randomly succeed or fail for demonstration
-      const success = Math.random() > 0.3 // 70% success rate
-
-      if (success) {
-        setExtractedText(mockOcrResult.text)
-        setErrorRanges(mockOcrResult.errorRanges)
-        setStatusMessage("Text extracted successfully")
-      } else {
+        if (result.success && result.text) {
+          setExtractedText(result.text)
+          if (result.errorRanges && result.errorRanges.length > 0) {
+            setErrorRanges(result.errorRanges)
+          }
+          setStatusMessage("Text extracted successfully")
+        } else {
+          setOcrFailed(true)
+          setStatusMessage(`OCR failed: ${result.error || 'Text unclear'}`)
+        }
+      } catch (error) {
+        console.error('Error extracting text:', error)
         setOcrFailed(true)
-        setStatusMessage("OCR failed: Text unclear")
+        setStatusMessage(`OCR failed: ${(error as Error).message || "Processing error"}`)
+      } finally {
+        setIsLoading(false)
       }
-
-      setIsLoading(false)
     }
 
-    simulateOcr()
+    extractTextFromImage()
   }, [])
 
   // Process text with highlighted errors
@@ -97,27 +109,46 @@ export default function TextExtractionScreen() {
     setErrorRanges([])
   }
 
-  const handleRetryOcr = () => {
+  const handleRetryOcr = async () => {
     // Reset and retry OCR
     setOcrFailed(false)
     setExtractedText("")
     setErrorRanges([])
 
-    // Simulate OCR process again
-    const simulateOcr = async () => {
-      setIsLoading(true)
-      setStatusMessage("Extracting text...")
-
-      // Simulate API call delay
-      await new Promise((resolve) => setTimeout(resolve, 2500))
-
-      setExtractedText(mockOcrResult.text)
-      setErrorRanges(mockOcrResult.errorRanges)
-      setStatusMessage("Text extracted successfully")
-      setIsLoading(false)
+    if (!currentImage) {
+      toast({
+        title: "No image to process",
+        description: "Please go back and capture an image first.",
+        variant: "destructive",
+      })
+      return
     }
 
-    simulateOcr()
+    // Process the image again
+    setIsLoading(true)
+    setStatusMessage("Extracting text...")
+
+    try {
+      // Call the API to process the image
+      const result = await imageService.processImage(currentImage)
+
+      if (result.success && result.text) {
+        setExtractedText(result.text)
+        if (result.errorRanges && result.errorRanges.length > 0) {
+          setErrorRanges(result.errorRanges)
+        }
+        setStatusMessage("Text extracted successfully")
+      } else {
+        setOcrFailed(true)
+        setStatusMessage(`OCR failed: ${result.error || 'Text unclear'}`)
+      }
+    } catch (error) {
+      console.error('Error extracting text:', error)
+      setOcrFailed(true)
+      setStatusMessage(`OCR failed: ${(error as Error).message || "Processing error"}`)
+    } finally {
+      setIsLoading(false)
+    }
   }
 
   const handleManualEntry = () => {
@@ -132,10 +163,53 @@ export default function TextExtractionScreen() {
     }
   }
 
-  const handleSaveText = () => {
-    // In a real app, you would save the text here
-    console.log("Saving text:", extractedText)
-    router.push("/qualifiers")
+  const handleSaveText = async () => {
+    if (!user) {
+      toast({
+        title: "Authentication required",
+        description: "Please sign in to save your entry.",
+        variant: "destructive",
+      })
+      return
+    }
+
+    try {
+      // Get the captured images from localStorage
+      const storedImages = localStorage.getItem('capturedImages')
+      const imageDataUrls = storedImages ? JSON.parse(storedImages) : []
+
+      // Create a title from the first few words of the text
+      const title = extractedText.split(' ').slice(0, 5).join(' ') + '...'
+
+      // Save the entry using the journal service
+      await journalService.processAndSaveEntry(
+        user.uid,
+        title,
+        extractedText,
+        imageDataUrls,
+        [] // Qualifiers will be added in the next step
+      )
+
+      // Clear localStorage
+      localStorage.removeItem('currentImage')
+      localStorage.removeItem('capturedImages')
+      localStorage.removeItem('extractedText')
+
+      toast({
+        title: "Entry saved",
+        description: "Your journal entry has been saved successfully.",
+      })
+
+      // Navigate to the entries page
+      router.push("/entries")
+    } catch (error) {
+      console.error('Error saving entry:', error)
+      toast({
+        title: "Error saving entry",
+        description: "There was a problem saving your journal entry.",
+        variant: "destructive",
+      })
+    }
   }
 
   const goBack = () => {

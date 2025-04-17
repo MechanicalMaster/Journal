@@ -17,6 +17,7 @@ import {
   Trash2,
   Edit,
   ChevronDown,
+  ChevronUp,
   X,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -51,6 +52,9 @@ import {
 } from "@/components/ui/sheet"
 import { Progress } from "@/components/ui/progress"
 import { cn } from "@/lib/utils"
+import { useAuth } from "@/lib/auth-context"
+import { journalService, JournalEntry } from "@/lib/journal-service"
+import { useToast } from "@/components/ui/use-toast"
 
 // Mock data for entries
 const mockEntries = Array.from({ length: 50 }, (_, i) => {
@@ -96,9 +100,11 @@ const filterOptions = {
 
 export default function EntriesListScreen() {
   const router = useRouter()
-  const [entries, setEntries] = useState(mockEntries)
-  const [filteredEntries, setFilteredEntries] = useState(mockEntries)
-  const [displayedEntries, setDisplayedEntries] = useState<typeof mockEntries>([])
+  const { user } = useAuth()
+  const { toast } = useToast()
+  const [entries, setEntries] = useState<JournalEntry[]>([])
+  const [filteredEntries, setFilteredEntries] = useState<JournalEntry[]>([])
+  const [displayedEntries, setDisplayedEntries] = useState<JournalEntry[]>([])
   const [searchQuery, setSearchQuery] = useState("")
   const [page, setPage] = useState(1)
   const [sortOrder, setSortOrder] = useState<"newest" | "oldest">("newest")
@@ -119,6 +125,31 @@ export default function EntriesListScreen() {
 
   const ENTRIES_PER_PAGE = 20
 
+  // Fetch entries when the component mounts or when the user changes
+  useEffect(() => {
+    const fetchEntries = async () => {
+      if (!user) {
+        setEntries([])
+        return
+      }
+
+      try {
+        const userEntries = await journalService.getEntries(user.uid)
+        setEntries(userEntries)
+        setFilteredEntries(userEntries)
+      } catch (error) {
+        console.error('Error fetching entries:', error)
+        toast({
+          title: "Error loading entries",
+          description: "There was a problem loading your journal entries.",
+          variant: "destructive",
+        })
+      }
+    }
+
+    fetchEntries()
+  }, [user])
+
   // Apply search, filters, and sorting
   useEffect(() => {
     let result = [...entries]
@@ -128,27 +159,28 @@ export default function EntriesListScreen() {
       const query = searchQuery.toLowerCase()
       result = result.filter(
         (entry) =>
-          entry.text.toLowerCase().includes(query) || entry.qualifiers.some((q) => q.toLowerCase().includes(query)),
+          entry.text.toLowerCase().includes(query) || 
+          entry.qualifiers.some((q: string) => q.toLowerCase().includes(query))
       )
     }
 
     // Apply filters
     if (activeFilters.tones.length > 0) {
-      result = result.filter((entry) => entry.qualifiers.some((q) => activeFilters.tones.includes(q)))
+      result = result.filter((entry) => entry.qualifiers.some((q: string) => activeFilters.tones.includes(q)))
     }
 
     if (activeFilters.topics.length > 0) {
-      result = result.filter((entry) => entry.qualifiers.some((q) => activeFilters.topics.includes(q)))
+      result = result.filter((entry) => entry.qualifiers.some((q: string) => activeFilters.topics.includes(q)))
     }
 
     if (activeFilters.moods.length > 0) {
-      result = result.filter((entry) => entry.qualifiers.some((q) => activeFilters.moods.includes(q)))
+      result = result.filter((entry) => entry.qualifiers.some((q: string) => activeFilters.moods.includes(q)))
     }
 
     // Apply sorting
     result.sort((a, b) => {
-      const dateA = new Date(a.date).getTime()
-      const dateB = new Date(b.date).getTime()
+      const dateA = new Date(a.createdAt).getTime()
+      const dateB = new Date(b.createdAt).getTime()
       return sortOrder === "newest" ? dateB - dateA : dateA - dateB
     })
 
@@ -223,7 +255,7 @@ export default function EntriesListScreen() {
     }, 300)
   }
 
-  const formatDate = (dateString: string) => {
+  const formatDate = (dateString: string | Date) => {
     const date = new Date(dateString)
     return date.toLocaleDateString("en-US", {
       year: "numeric",
@@ -238,6 +270,27 @@ export default function EntriesListScreen() {
 
   const goBack = () => {
     router.push("/")
+  }
+
+  // Update the handleDelete function
+  const handleDelete = async (entryId: string) => {
+    try {
+      await journalService.deleteEntry(entryId)
+      setEntries((prevEntries) => prevEntries.filter((entry) => entry.id !== entryId))
+      setFilteredEntries((prevEntries) => prevEntries.filter((entry) => entry.id !== entryId))
+      
+      toast({
+        title: "Entry deleted",
+        description: "The journal entry has been deleted successfully.",
+      })
+    } catch (error) {
+      console.error('Error deleting entry:', error)
+      toast({
+        title: "Error deleting entry",
+        description: "There was a problem deleting the journal entry.",
+        variant: "destructive",
+      })
+    }
   }
 
   return (
@@ -327,77 +380,57 @@ export default function EntriesListScreen() {
 
             <div className="grid gap-4">
               {displayedEntries.map((entry) => (
-                <Card
+                <div
                   key={entry.id}
-                  className="cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors"
-                  onClick={() => goToEntryDetails(entry.id)}
+                  className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4 hover:shadow-md transition-shadow cursor-pointer"
+                  onClick={() => entry.id && goToEntryDetails(entry.id)}
                 >
-                  <CardContent className="p-4">
-                    <div className="flex gap-4">
-                      <div className="h-20 w-16 flex-shrink-0 rounded-md overflow-hidden bg-gray-100 dark:bg-gray-800">
-                        <img
-                          src={entry.thumbnail || "/placeholder.svg"}
-                          alt={`Thumbnail for ${entry.id}`}
-                          className="h-full w-full object-cover"
-                        />
-                      </div>
-
-                      <div className="flex-1 min-w-0">
-                        <div className="flex justify-between items-start">
-                          <p className="text-sm font-medium line-clamp-2">{entry.text}</p>
-                          <div className="flex items-center gap-2 ml-2 flex-shrink-0">
-                            <DropdownMenu>
-                              <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-                                <Button variant="ghost" size="icon" className="h-8 w-8">
-                                  <ChevronDown className="h-4 w-4" />
-                                </Button>
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent align="end">
-                                <DropdownMenuItem
-                                  onClick={(e) => {
-                                    e.stopPropagation()
-                                    router.push(`/entries/${entry.id}/edit`)
-                                  }}
-                                >
-                                  <Edit className="h-4 w-4 mr-2" />
-                                  Edit
-                                </DropdownMenuItem>
-                                <DropdownMenuSeparator />
-                                <DropdownMenuItem
-                                  className="text-red-600 dark:text-red-400"
-                                  onClick={(e) => {
-                                    e.stopPropagation()
-                                    // In a real app, you would show a confirmation dialog
-                                    setEntries(entries.filter((e) => e.id !== entry.id))
-                                  }}
-                                >
-                                  <Trash2 className="h-4 w-4 mr-2" />
-                                  Delete
-                                </DropdownMenuItem>
-                              </DropdownMenuContent>
-                            </DropdownMenu>
-                          </div>
-                        </div>
-
-                        <div className="flex flex-wrap gap-1 mt-2">
-                          {entry.qualifiers.map((qualifier, i) => (
-                            <Badge key={i} variant="secondary" className="text-xs">
-                              {qualifier}
-                            </Badge>
+                  <div className="flex justify-between items-start">
+                    <div className="flex-1">
+                      <h3 className="font-medium">{entry.title}</h3>
+                      <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                        {formatDate(entry.createdAt)}
+                      </p>
+                      <p className="mt-2 text-gray-600 dark:text-gray-300 line-clamp-2">
+                        {entry.text}
+                      </p>
+                      {entry.images && entry.images.length > 0 && (
+                        <div className="mt-2 flex gap-2">
+                          {entry.images.slice(0, 3).map((image, index) => (
+                            <div
+                              key={index}
+                              className="w-16 h-16 rounded-md bg-gray-100 dark:bg-gray-700 overflow-hidden"
+                            >
+                              <img
+                                src={image}
+                                alt={`Entry image ${index + 1}`}
+                                className="w-full h-full object-cover"
+                              />
+                            </div>
                           ))}
+                          {entry.images.length > 3 && (
+                            <div className="w-16 h-16 rounded-md bg-gray-100 dark:bg-gray-700 flex items-center justify-center">
+                              <span className="text-sm text-gray-500">
+                                +{entry.images.length - 3}
+                              </span>
+                            </div>
+                          )}
                         </div>
-
-                        <div className="flex justify-between items-center mt-2 text-xs text-gray-500 dark:text-gray-400">
-                          <div className="flex items-center">
-                            <Calendar className="h-3 w-3 mr-1" />
-                            {formatDate(entry.date)}
-                          </div>
-                          <div>{entry.id}</div>
-                        </div>
-                      </div>
+                      )}
                     </div>
-                  </CardContent>
-                </Card>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="text-gray-400 hover:text-red-500"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        entry.id && handleDelete(entry.id)
+                      }}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
               ))}
             </div>
 

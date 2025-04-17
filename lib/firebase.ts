@@ -1,9 +1,8 @@
 // Import the functions you need from the SDKs you need
 import { initializeApp, getApps } from "firebase/app";
 import { getAuth } from "firebase/auth";
-import { getFirestore, initializeFirestore, connectFirestoreEmulator } from "firebase/firestore";
+import { getFirestore, initializeFirestore } from "firebase/firestore";
 import { getStorage } from "firebase/storage";
-import { enableIndexedDbPersistence } from "firebase/firestore";
 
 // Your web app's Firebase configuration
 // For Firebase JS SDK v7.20.0 and later, measurementId is optional
@@ -21,21 +20,23 @@ const firebaseConfig = {
 const app = getApps().length > 0 ? getApps()[0] : initializeApp(firebaseConfig);
 const auth = getAuth(app);
 
-// Initialize Firestore with enhanced connection settings
+// Initialize Firestore with long polling to fix connection issues
 const db = initializeFirestore(app, {
   experimentalForceLongPolling: true,
-  cacheSizeBytes: 50000000, // Increase cache size to 50MB
   ignoreUndefinedProperties: true,
+  cacheSizeBytes: 50000000, // 50MB cache
 });
 
-// Enable offline persistence when in browser environment
-if (typeof window !== 'undefined') {
-  enableIndexedDbPersistence(db)
-    .catch((err) => {
-      console.error("Firestore persistence error:", err.code, err.message);
-    });
-}
-
+// Initialize Firebase Storage
 const storage = getStorage(app);
+
+// Add Storage security rules in the Firebase console:
+// service firebase.storage {
+//   match /b/{bucket}/o {
+//     match /{allPaths=**} {
+//       allow read, write: if request.auth != null;
+//     }
+//   }
+// }
 
 export { app, auth, db, storage }; 

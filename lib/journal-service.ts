@@ -89,10 +89,24 @@ export const journalService = {
     qualifiers: string[]
   ): Promise<JournalEntry> {
     try {
+      console.log(`Processing journal entry for user ${userId} with ${imageDataUrls.length} images`);
+      
       // Upload all images to Firebase Storage
-      const imageUrls = await Promise.all(
-        imageDataUrls.map(imageDataUrl => imageService.uploadImage(imageDataUrl, userId))
-      );
+      let imageUrls: string[] = [];
+      
+      // Handle image uploads
+      if (imageDataUrls && imageDataUrls.length > 0) {
+        try {
+          imageUrls = await Promise.all(
+            imageDataUrls.map(imageDataUrl => imageService.uploadImage(imageDataUrl, userId))
+          );
+          console.log(`Successfully uploaded ${imageUrls.length} images`);
+        } catch (error) {
+          console.error('Error uploading images:', error);
+          // Continue with empty image array if uploads fail
+          imageUrls = [];
+        }
+      }
 
       // Create the journal entry
       return await this.createEntry({

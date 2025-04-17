@@ -151,11 +151,9 @@ export default function TextExtractionScreen() {
     }
   }
 
-  const handleManualEntry = () => {
-    setExtractedText("")
-    setErrorRanges([])
+  const handleEditOcr = () => {
     setOcrFailed(false)
-    setStatusMessage("Manual entry mode")
+    setStatusMessage("Edit mode - Make corrections as needed")
 
     // Focus on the text area
     if (textAreaRef.current) {
@@ -216,6 +214,19 @@ export default function TextExtractionScreen() {
     router.push("/preview")
   }
 
+  // Add a new function for fresh manual entry
+  const handleManualEntry = () => {
+    setExtractedText("")
+    setErrorRanges([])
+    setOcrFailed(false)
+    setStatusMessage("Manual entry mode")
+
+    // Focus on the text area
+    if (textAreaRef.current) {
+      textAreaRef.current.focus()
+    }
+  }
+
   return (
     <div className="flex flex-col min-h-screen bg-gray-50 dark:bg-gray-900">
       <header className="sticky top-0 z-10 w-full bg-white dark:bg-gray-950 border-b border-gray-200 dark:border-gray-800">
@@ -259,9 +270,13 @@ export default function TextExtractionScreen() {
                   <RefreshCw className="h-4 w-4 mr-2" />
                   Retry OCR
                 </Button>
-                <Button onClick={handleManualEntry}>
+                <Button onClick={handleEditOcr}>
                   <Edit className="h-4 w-4 mr-2" />
-                  Enter Manually
+                  Edit OCR
+                </Button>
+                <Button variant="outline" onClick={handleManualEntry}>
+                  <Edit className="h-4 w-4 mr-2" />
+                  Clear & Manual Entry
                 </Button>
               </div>
             </div>
@@ -297,9 +312,13 @@ export default function TextExtractionScreen() {
         <div className="mt-6 flex flex-col sm:flex-row gap-3 justify-end">
           {!ocrFailed && !isLoading && (
             <>
+              <Button variant="outline" onClick={handleEditOcr}>
+                <Edit className="h-4 w-4 mr-2" />
+                Edit OCR
+              </Button>
               <Button variant="outline" onClick={handleManualEntry}>
                 <Edit className="h-4 w-4 mr-2" />
-                Manual Entry
+                Clear & Manual Entry
               </Button>
               <Button variant="outline" onClick={handleRetryOcr}>
                 <RefreshCw className="h-4 w-4 mr-2" />

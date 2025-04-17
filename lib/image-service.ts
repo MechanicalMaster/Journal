@@ -1,5 +1,5 @@
-import { getStorage, ref, uploadString, getDownloadURL } from "firebase/storage";
-import { app } from "./firebase";
+import { getStorage, ref } from "firebase/storage";
+import { app, auth } from "./firebase";
 
 // Initialize Firebase Storage
 const storage = getStorage(app);
@@ -12,20 +12,56 @@ interface ProcessImageResult {
 }
 
 export const imageService = {
-  // Upload an image to Firebase Storage
+  // Upload an image using server-side API route
   async uploadImage(imageDataUrl: string, userId: string): Promise<string> {
     try {
-      // Create a unique file name
-      const timestamp = Date.now();
-      const imageRef = ref(storage, `journal-images/${userId}/${timestamp}.jpg`);
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json'
+      };
       
-      // Upload the image
-      const dataUrlWithoutPrefix = imageDataUrl.split(',')[1];
-      await uploadString(imageRef, dataUrlWithoutPrefix, 'base64');
+      // In development mode, just pass the user ID in the header
+      if (process.env.NODE_ENV === 'development') {
+        console.log('Development mode: Using direct user ID in header');
+        headers['X-User-ID'] = userId;
+      } else {
+        // In production, get a real token
+        const user = auth.currentUser;
+        if (!user) {
+          throw new Error('Authentication required to upload images');
+        }
+        
+        let token = '';
+        try {
+          token = await user.getIdToken();
+          headers['Authorization'] = `Bearer ${token}`;
+        } catch (error) {
+          console.error('Error getting ID token:', error);
+          throw new Error('Failed to get authentication token');
+        }
+      }
       
-      // Get the download URL
-      const downloadUrl = await getDownloadURL(imageRef);
-      return downloadUrl;
+      // Call the API route to upload the image
+      const response = await fetch('/api/upload-image', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ 
+          imageData: imageDataUrl,
+          requestUserId: userId  // renamed to distinguish from the server-side userId
+        }),
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to upload image');
+      }
+      
+      const data = await response.json();
+      
+      if (!data.success || !data.url) {
+        throw new Error('Upload failed: No URL returned');
+      }
+      
+      return data.url;
     } catch (error) {
       console.error('Error uploading image:', error);
       throw error;

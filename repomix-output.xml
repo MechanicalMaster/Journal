@@ -44,24 +44,6 @@ The content is organized as follows:
 
 <directory_structure>
 app/
-  (dashboard)/
-    dashboard/
-      page.tsx
-    settings/
-      communication/
-        page.tsx
-      permissions/
-        page.tsx
-      profile/
-        page.tsx
-      security/
-        page.tsx
-    users/
-      [id]/
-        page.tsx
-      loading.tsx
-      page.tsx
-    layout.tsx
   entries/
     [id]/
       edit/
@@ -135,14 +117,9 @@ components/
     use-mobile.tsx
     use-toast.ts
   create-user-dialog.tsx
-  dashboard-chart.tsx
   footer.tsx
   header.tsx
-  recent-transactions.tsx
-  sidebar-provider.tsx
-  sidebar.tsx
   theme-provider.tsx
-  user-transactions.tsx
 hooks/
   use-mobile.tsx
   use-toast.ts
@@ -164,840 +141,6 @@ tsconfig.json
 
 <files>
 This section contains the contents of the repository's files.
-
-<file path="app/(dashboard)/dashboard/page.tsx">
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { UsersIcon, WalletIcon, UserPlusIcon, UserXIcon } from "lucide-react"
-import { DashboardChart } from "@/components/dashboard-chart"
-import { RecentTransactions } from "@/components/recent-transactions"
-
-export default function DashboardPage() {
-  return (
-    <div className="flex flex-col gap-4">
-      <div>
-        <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Dashboard</h1>
-        <p className="text-muted-foreground">Overview of your platform statistics and performance.</p>
-      </div>
-
-      <Tabs defaultValue="daily" className="space-y-4">
-        <div className="flex items-center justify-between">
-          <TabsList>
-            <TabsTrigger value="daily">Daily</TabsTrigger>
-            <TabsTrigger value="weekly">Weekly</TabsTrigger>
-            <TabsTrigger value="monthly">Monthly</TabsTrigger>
-          </TabsList>
-        </div>
-
-        <TabsContent value="daily" className="space-y-4">
-          <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">New Users Today</CardTitle>
-                <UserPlusIcon className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">24</div>
-                <p className="text-xs text-muted-foreground">+12% from yesterday</p>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Total Users</CardTitle>
-                <UsersIcon className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">1,284</div>
-                <p className="text-xs text-muted-foreground">+2.5% from last week</p>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Transactions Today</CardTitle>
-                <WalletIcon className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">R 12,543</div>
-                <p className="text-xs text-muted-foreground">+18% from yesterday</p>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Non-Users</CardTitle>
-                <UserXIcon className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">342</div>
-                <p className="text-xs text-muted-foreground">-4% from yesterday</p>
-              </CardContent>
-            </Card>
-          </div>
-        </TabsContent>
-
-        <TabsContent value="weekly" className="space-y-4">
-          <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">New Users This Week</CardTitle>
-                <UserPlusIcon className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">156</div>
-                <p className="text-xs text-muted-foreground">+8% from last week</p>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Total Users</CardTitle>
-                <UsersIcon className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">1,284</div>
-                <p className="text-xs text-muted-foreground">+2.5% from last week</p>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Transactions This Week</CardTitle>
-                <WalletIcon className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">R 87,651</div>
-                <p className="text-xs text-muted-foreground">+12% from last week</p>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Non-Users</CardTitle>
-                <UserXIcon className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">342</div>
-                <p className="text-xs text-muted-foreground">-4% from last week</p>
-              </CardContent>
-            </Card>
-          </div>
-        </TabsContent>
-
-        <TabsContent value="monthly" className="space-y-4">
-          <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">New Users This Month</CardTitle>
-                <UserPlusIcon className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">642</div>
-                <p className="text-xs text-muted-foreground">+15% from last month</p>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Total Users</CardTitle>
-                <UsersIcon className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">1,284</div>
-                <p className="text-xs text-muted-foreground">+2.5% from last month</p>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Transactions This Month</CardTitle>
-                <WalletIcon className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">R 324,845</div>
-                <p className="text-xs text-muted-foreground">+22% from last month</p>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Non-Users</CardTitle>
-                <UserXIcon className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">342</div>
-                <p className="text-xs text-muted-foreground">-4% from last month</p>
-              </CardContent>
-            </Card>
-          </div>
-        </TabsContent>
-      </Tabs>
-
-      <div className="grid gap-4 grid-cols-1 lg:grid-cols-7">
-        <Card className="lg:col-span-4">
-          <CardHeader>
-            <CardTitle>Transaction Overview</CardTitle>
-            <CardDescription>Transaction volume over time</CardDescription>
-          </CardHeader>
-          <CardContent className="pl-2">
-            <DashboardChart />
-          </CardContent>
-        </Card>
-
-        <Card className="lg:col-span-3">
-          <CardHeader>
-            <CardTitle>Recent Transactions</CardTitle>
-            <CardDescription>Latest transactions on the platform</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <RecentTransactions />
-          </CardContent>
-        </Card>
-      </div>
-    </div>
-  )
-}
-</file>
-
-<file path="app/(dashboard)/settings/communication/page.tsx">
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Button } from "@/components/ui/button"
-
-export default function CommunicationSettingsPage() {
-  return (
-    <div className="space-y-6">
-      <h1 className="text-3xl font-bold">Communication Settings</h1>
-      <Card>
-        <CardHeader>
-          <CardTitle>Contact Information</CardTitle>
-          <CardDescription>Manage your email and phone number for communications.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <form className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="email">Email Address</Label>
-              <Input id="email" type="email" placeholder="john@example.com" />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="phone">Phone Number</Label>
-              <Input id="phone" type="tel" placeholder="+27 71 234 5678" />
-            </div>
-            <Button type="submit">Update Contact Info</Button>
-          </form>
-        </CardContent>
-      </Card>
-    </div>
-  )
-}
-</file>
-
-<file path="app/(dashboard)/settings/permissions/page.tsx">
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Checkbox } from "@/components/ui/checkbox"
-import { Label } from "@/components/ui/label"
-import { Button } from "@/components/ui/button"
-
-export default function PermissionsSettingsPage() {
-  return (
-    <div className="space-y-6">
-      <h1 className="text-3xl font-bold">Permissions Settings</h1>
-      <Card>
-        <CardHeader>
-          <CardTitle>Access Control</CardTitle>
-          <CardDescription>Manage user roles and permissions.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <form className="space-y-4">
-            <div className="space-y-2">
-              <Label>User Permissions</Label>
-              <div className="space-y-2">
-                <div className="flex items-center space-x-2">
-                  <Checkbox id="manage-users" />
-                  <Label htmlFor="manage-users">Manage Users</Label>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <Checkbox id="manage-transactions" />
-                  <Label htmlFor="manage-transactions">Manage Transactions</Label>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <Checkbox id="view-analytics" />
-                  <Label htmlFor="view-analytics">View Analytics</Label>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <Checkbox id="manage-settings" />
-                  <Label htmlFor="manage-settings">Manage Settings</Label>
-                </div>
-              </div>
-            </div>
-            <Button type="submit">Update Permissions</Button>
-          </form>
-        </CardContent>
-      </Card>
-    </div>
-  )
-}
-</file>
-
-<file path="app/(dashboard)/settings/profile/page.tsx">
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Button } from "@/components/ui/button"
-
-export default function ProfileSettingsPage() {
-  return (
-    <div className="space-y-6">
-      <h1 className="text-3xl font-bold">Profile Settings</h1>
-      <Card>
-        <CardHeader>
-          <CardTitle>Personal Information</CardTitle>
-          <CardDescription>Update your personal details here.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <form className="space-y-4">
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <div className="space-y-2">
-                <Label htmlFor="firstName">First Name</Label>
-                <Input id="firstName" placeholder="John" />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="lastName">Last Name</Label>
-                <Input id="lastName" placeholder="Doe" />
-              </div>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="username">Username</Label>
-              <Input id="username" placeholder="johndoe" />
-            </div>
-            <Button type="submit">Save Changes</Button>
-          </form>
-        </CardContent>
-      </Card>
-    </div>
-  )
-}
-</file>
-
-<file path="app/(dashboard)/settings/security/page.tsx">
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Button } from "@/components/ui/button"
-
-export default function SecuritySettingsPage() {
-  return (
-    <div className="space-y-6">
-      <h1 className="text-3xl font-bold">Security Settings</h1>
-      <Card>
-        <CardHeader>
-          <CardTitle>Change Password</CardTitle>
-          <CardDescription>Ensure your account is using a long, random password to stay secure.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <form className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="currentPassword">Current Password</Label>
-              <Input id="currentPassword" type="password" />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="newPassword">New Password</Label>
-              <Input id="newPassword" type="password" />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="confirmPassword">Confirm New Password</Label>
-              <Input id="confirmPassword" type="password" />
-            </div>
-            <Button type="submit">Update Password</Button>
-          </form>
-        </CardContent>
-      </Card>
-    </div>
-  )
-}
-</file>
-
-<file path="app/(dashboard)/users/[id]/page.tsx">
-import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { ArrowLeft, UserCog, Wallet, History, Shield, AlertTriangle } from "lucide-react"
-import Link from "next/link"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { UserTransactions } from "@/components/user-transactions"
-
-export default function UserProfilePage({ params }: { params: { id: string } }) {
-  // In a real app, you would fetch the user data based on the ID
-  const user = users.find((u) => u.id === params.id) || users[0]
-
-  return (
-    <div className="flex flex-col gap-4">
-      <div className="flex items-center gap-2">
-        <Button variant="ghost" size="icon" asChild>
-          <Link href="/users">
-            <ArrowLeft className="h-4 w-4" />
-          </Link>
-        </Button>
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">
-            {user.name} {user.surname}
-          </h1>
-          <p className="text-muted-foreground">User profile and account management</p>
-        </div>
-      </div>
-
-      <Tabs defaultValue="profile" className="space-y-4">
-        <TabsList>
-          <TabsTrigger value="profile">
-            <UserCog className="h-4 w-4 mr-2" />
-            Profile
-          </TabsTrigger>
-          <TabsTrigger value="wallet">
-            <Wallet className="h-4 w-4 mr-2" />
-            Wallet
-          </TabsTrigger>
-          <TabsTrigger value="transactions">
-            <History className="h-4 w-4 mr-2" />
-            Transactions
-          </TabsTrigger>
-          <TabsTrigger value="security">
-            <Shield className="h-4 w-4 mr-2" />
-            Security
-          </TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="profile">
-          <Card>
-            <CardHeader>
-              <CardTitle>Profile Information</CardTitle>
-              <CardDescription>View and update user profile details</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="firstName">First Name</Label>
-                  <Input id="firstName" defaultValue={user.name} />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="surname">Surname</Label>
-                  <Input id="surname" defaultValue={user.surname} />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="email">Email</Label>
-                  <Input id="email" type="email" defaultValue={user.email} />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="phone">Phone Number</Label>
-                  <Input id="phone" defaultValue={user.phone} />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="idType">ID Type</Label>
-                  <Select defaultValue={user.idType}>
-                    <SelectTrigger id="idType">
-                      <SelectValue placeholder="Select ID type" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="ID">ID</SelectItem>
-                      <SelectItem value="Passport">Passport</SelectItem>
-                      <SelectItem value="Asylum Seeker">Asylum Seeker</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="status">Account Status</Label>
-                  <Select defaultValue={user.status}>
-                    <SelectTrigger id="status">
-                      <SelectValue placeholder="Select status" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="Active">Active</SelectItem>
-                      <SelectItem value="Pending">Pending</SelectItem>
-                      <SelectItem value="Suspended">Suspended</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-            </CardContent>
-            <CardFooter className="flex justify-between">
-              <Button variant="outline">Reset</Button>
-              <Button>Save Changes</Button>
-            </CardFooter>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="wallet">
-          <Card>
-            <CardHeader>
-              <CardTitle>Wallet Information</CardTitle>
-              <CardDescription>Manage user wallet and balance</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <Card>
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-sm font-medium">Current Balance</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="text-2xl font-bold">R {user.balance.toFixed(2)}</div>
-                    <p className="text-xs text-muted-foreground">Last updated: Today at 12:34 PM</p>
-                  </CardContent>
-                </Card>
-
-                <Card>
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-sm font-medium">Wallet Status</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="text-2xl font-bold">{user.walletStatus}</div>
-                    <p className="text-xs text-muted-foreground">Created: {user.walletCreated}</p>
-                  </CardContent>
-                </Card>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="topup">Top Up Wallet</Label>
-                <div className="flex gap-2">
-                  <Input id="topup" type="number" placeholder="Amount in ZAR" />
-                  <Button>Add Funds</Button>
-                </div>
-              </div>
-            </CardContent>
-            <CardFooter className="flex justify-between">
-              <Button variant="outline" className="gap-2">
-                <AlertTriangle className="h-4 w-4" />
-                Freeze Wallet
-              </Button>
-              <Button>Save Changes</Button>
-            </CardFooter>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="transactions">
-          <Card>
-            <CardHeader>
-              <CardTitle>Transaction History</CardTitle>
-              <CardDescription>View all transactions for this user</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <UserTransactions userId={params.id} />
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="security">
-          <Card>
-            <CardHeader>
-              <CardTitle>Security Settings</CardTitle>
-              <CardDescription>Manage user security and access</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="resetPassword">Reset Password</Label>
-                <div className="flex gap-2">
-                  <Button variant="outline" className="w-full">
-                    Send Reset Link
-                  </Button>
-                  <Button className="w-full">Generate Temporary Password</Button>
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <Label>Two-Factor Authentication</Label>
-                <div className="flex items-center justify-between rounded-lg border p-4">
-                  <div className="space-y-0.5">
-                    <div className="font-medium">2FA Status</div>
-                    <div className="text-sm text-muted-foreground">
-                      {user.twoFactorEnabled ? "Enabled" : "Disabled"}
-                    </div>
-                  </div>
-                  <Button variant={user.twoFactorEnabled ? "destructive" : "outline"}>
-                    {user.twoFactorEnabled ? "Disable" : "Enable"}
-                  </Button>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-      </Tabs>
-    </div>
-  )
-}
-
-const users = [
-  {
-    id: "1",
-    name: "Thabo",
-    surname: "Mbeki",
-    email: "thabo.mbeki@example.com",
-    idType: "ID",
-    phone: "+27 71 234 5678",
-    status: "Active",
-    balance: 1250.75,
-    walletStatus: "Active",
-    walletCreated: "2023-05-12",
-    twoFactorEnabled: false,
-  },
-  {
-    id: "2",
-    name: "Nomzamo",
-    surname: "Mbatha",
-    email: "nomzamo.mbatha@example.com",
-    idType: "Passport",
-    phone: "+27 82 345 6789",
-    status: "Active",
-    balance: 3450.5,
-    walletStatus: "Active",
-    walletCreated: "2023-06-18",
-    twoFactorEnabled: true,
-  },
-  {
-    id: "3",
-    name: "Siya",
-    surname: "Kolisi",
-    email: "siya.kolisi@example.com",
-    idType: "ID",
-    phone: "+27 63 456 7890",
-    status: "Active",
-    balance: 5678.25,
-    walletStatus: "Active",
-    walletCreated: "2023-04-30",
-    twoFactorEnabled: false,
-  },
-  {
-    id: "4",
-    name: "Bonang",
-    surname: "Matheba",
-    email: "bonang.matheba@example.com",
-    idType: "ID",
-    phone: "+27 74 567 8901",
-    status: "Pending",
-    balance: 0.0,
-    walletStatus: "Pending",
-    walletCreated: "2023-08-05",
-    twoFactorEnabled: false,
-  },
-  {
-    id: "5",
-    name: "Trevor",
-    surname: "Noah",
-    email: "trevor.noah@example.com",
-    idType: "Passport",
-    phone: "+27 85 678 9012",
-    status: "Active",
-    balance: 12500.0,
-    walletStatus: "Active",
-    walletCreated: "2023-02-14",
-    twoFactorEnabled: true,
-  },
-]
-</file>
-
-<file path="app/(dashboard)/users/loading.tsx">
-export default function Loading() {
-  return null
-}
-</file>
-
-<file path="app/(dashboard)/users/page.tsx">
-import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader } from "@/components/ui/card"
-import { Input } from "@/components/ui/input"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Search, UserCog } from "lucide-react"
-import Link from "next/link"
-import { CreateUserDialog } from "@/components/create-user-dialog"
-
-// Update the users page to improve responsiveness
-export default function UsersPage() {
-  return (
-    <div className="flex flex-col gap-4">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Users</h1>
-          <p className="text-muted-foreground">Manage user accounts and wallets</p>
-        </div>
-        <CreateUserDialog />
-      </div>
-
-      <Card>
-        <CardHeader className="p-4">
-          <div className="flex flex-col sm:flex-row sm:items-center gap-4">
-            <div className="flex items-center gap-2 w-full max-w-sm">
-              <Search className="h-4 w-4 text-muted-foreground" />
-              <Input placeholder="Search users..." className="h-9" />
-            </div>
-            <div className="flex items-center gap-2 ml-auto">
-              <Button variant="outline" size="sm">
-                Export
-              </Button>
-              <Button variant="outline" size="sm">
-                Filter
-              </Button>
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent className="p-0 overflow-auto">
-          <div className="w-full min-w-[640px]">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Name</TableHead>
-                  <TableHead>Email</TableHead>
-                  <TableHead>ID Type</TableHead>
-                  <TableHead>Phone</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {users.map((user) => (
-                  <TableRow key={user.id}>
-                    <TableCell className="font-medium">
-                      {user.name} {user.surname}
-                    </TableCell>
-                    <TableCell>{user.email}</TableCell>
-                    <TableCell>{user.idType}</TableCell>
-                    <TableCell>{user.phone}</TableCell>
-                    <TableCell>
-                      <div
-                        className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${
-                          user.status === "Active"
-                            ? "bg-green-50 text-green-700 dark:bg-green-900/20 dark:text-green-300"
-                            : "bg-yellow-50 text-yellow-700 dark:bg-yellow-900/20 dark:text-yellow-300"
-                        }`}
-                      >
-                        {user.status}
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <Button variant="ghost" size="icon" asChild>
-                        <Link href={`/users/${user.id}`}>
-                          <UserCog className="h-4 w-4" />
-                          <span className="sr-only">Edit user</span>
-                        </Link>
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
-        </CardContent>
-      </Card>
-    </div>
-  )
-}
-
-const users = [
-  {
-    id: "1",
-    name: "Thabo",
-    surname: "Mbeki",
-    email: "thabo.mbeki@example.com",
-    idType: "ID",
-    phone: "+27 71 234 5678",
-    status: "Active",
-  },
-  {
-    id: "2",
-    name: "Nomzamo",
-    surname: "Mbatha",
-    email: "nomzamo.mbatha@example.com",
-    idType: "Passport",
-    phone: "+27 82 345 6789",
-    status: "Active",
-  },
-  {
-    id: "3",
-    name: "Siya",
-    surname: "Kolisi",
-    email: "siya.kolisi@example.com",
-    idType: "ID",
-    phone: "+27 63 456 7890",
-    status: "Active",
-  },
-  {
-    id: "4",
-    name: "Bonang",
-    surname: "Matheba",
-    email: "bonang.matheba@example.com",
-    idType: "ID",
-    phone: "+27 74 567 8901",
-    status: "Pending",
-  },
-  {
-    id: "5",
-    name: "Trevor",
-    surname: "Noah",
-    email: "trevor.noah@example.com",
-    idType: "Passport",
-    phone: "+27 85 678 9012",
-    status: "Active",
-  },
-  {
-    id: "6",
-    name: "Patrice",
-    surname: "Motsepe",
-    email: "patrice.motsepe@example.com",
-    idType: "ID",
-    phone: "+27 76 789 0123",
-    status: "Active",
-  },
-  {
-    id: "7",
-    name: "Caster",
-    surname: "Semenya",
-    email: "caster.semenya@example.com",
-    idType: "ID",
-    phone: "+27 87 890 1234",
-    status: "Pending",
-  },
-  {
-    id: "8",
-    name: "Elon",
-    surname: "Musk",
-    email: "elon.musk@example.com",
-    idType: "Asylum Seeker",
-    phone: "+27 78 901 2345",
-    status: "Active",
-  },
-]
-</file>
-
-<file path="app/(dashboard)/layout.tsx">
-import type React from "react"
-import { Sidebar } from "@/components/sidebar"
-import { Header } from "@/components/header"
-import { SidebarProvider } from "@/components/sidebar-provider"
-
-export default function DashboardLayout({
-  children,
-}: {
-  children: React.ReactNode
-}) {
-  return (
-    <SidebarProvider>
-      <div className="min-h-screen bg-background">
-        <Sidebar />
-        <div className="lg:pl-72">
-          <Header />
-          <main className="p-4 md:p-6 lg:p-8">{children}</main>
-        </div>
-      </div>
-    </SidebarProvider>
-  )
-}
-</file>
 
 <file path="app/entries/[id]/edit/page.tsx">
 "use client"
@@ -2360,196 +1503,6 @@ export default function TextExtractionScreen() {
           )}
         </div>
       </main>
-    </div>
-  )
-}
-</file>
-
-<file path="app/new-entry/page.tsx">
-"use client"
-
-import { useState, useRef, useEffect } from "react"
-import { useRouter } from "next/navigation"
-import { X, Zap, ZapOff, Camera } from "lucide-react"
-import { Button } from "@/components/ui/button"
-import { cn } from "@/lib/utils"
-
-export default function CameraScreen() {
-  const router = useRouter()
-  const videoRef = useRef<HTMLVideoElement>(null)
-  const canvasRef = useRef<HTMLCanvasElement>(null)
-  const [hasCamera, setHasCamera] = useState(false)
-  const [isFlashOn, setIsFlashOn] = useState(false)
-  const [pageCount, setPageCount] = useState(1)
-  const [capturedImages, setCapturedImages] = useState<string[]>([])
-  const [showAddAnother, setShowAddAnother] = useState(false)
-  const [cameraError, setCameraError] = useState<string | null>(null)
-
-  // Initialize camera
-  useEffect(() => {
-    let stream: MediaStream | null = null
-
-    async function setupCamera() {
-      try {
-        // Request camera access with flash if supported
-        const constraints = {
-          video: {
-            facingMode: "environment", // Use back camera if available
-            width: { ideal: 1920 },
-            height: { ideal: 1080 },
-            advanced: [{ torch: isFlashOn }], // May not be supported on all devices
-          },
-        }
-
-        stream = await navigator.mediaDevices.getUserMedia(constraints)
-
-        if (videoRef.current) {
-          videoRef.current.srcObject = stream
-          setHasCamera(true)
-        }
-      } catch (err) {
-        console.error("Error accessing camera:", err)
-        setCameraError("Could not access camera. Please check permissions.")
-        setHasCamera(false)
-      }
-    }
-
-    setupCamera()
-
-    // Cleanup function
-    return () => {
-      if (stream) {
-        stream.getTracks().forEach((track) => track.stop())
-      }
-    }
-  }, [isFlashOn]) // Re-initialize when flash setting changes
-
-  // Toggle flash (may not work on all devices/browsers)
-  const toggleFlash = () => {
-    setIsFlashOn(!isFlashOn)
-  }
-
-  // Capture image
-  const captureImage = () => {
-    if (videoRef.current && canvasRef.current) {
-      const video = videoRef.current
-      const canvas = canvasRef.current
-
-      // Set canvas dimensions to match video
-      canvas.width = video.videoWidth
-      canvas.height = video.videoHeight
-
-      // Draw current video frame to canvas
-      const context = canvas.getContext("2d")
-      if (context) {
-        context.drawImage(video, 0, 0, canvas.width, canvas.height)
-
-        // Convert canvas to image data URL
-        const imageDataUrl = canvas.toDataURL("image/jpeg")
-
-        // Add to captured images array
-        setCapturedImages([...capturedImages, imageDataUrl])
-
-        // Show "Add Another Page" option
-        setShowAddAnother(true)
-      }
-    }
-  }
-
-  // Add another page
-  const addAnotherPage = () => {
-    setPageCount(pageCount + 1)
-    setShowAddAnother(false)
-  }
-
-  // Continue to preview screen
-  const continueToPreview = () => {
-    // In a real app, you would pass the captured images to the next screen
-    // For now, we'll just navigate and log the number of images
-    console.log(`Captured ${capturedImages.length} images`)
-    router.push("/preview")
-  }
-
-  // Cancel and return to home
-  const cancelCapture = () => {
-    router.push("/")
-  }
-
-  return (
-    <div className="relative flex flex-col h-screen bg-black">
-      {/* Camera View */}
-      {hasCamera ? (
-        <video ref={videoRef} autoPlay playsInline className="absolute inset-0 w-full h-full object-cover z-0" />
-      ) : (
-        <div className="absolute inset-0 flex items-center justify-center bg-gray-900 text-white z-0">
-          {cameraError || "Camera not available"}
-        </div>
-      )}
-
-      {/* Hidden canvas for capturing images */}
-      <canvas ref={canvasRef} className="hidden" />
-
-      {/* Focus Frame */}
-      <div className="absolute inset-0 flex items-center justify-center z-10 pointer-events-none">
-        <div className="w-4/5 h-3/5 border-2 border-white rounded-md opacity-70"></div>
-      </div>
-
-      {/* Top Controls */}
-      <div className="absolute top-0 left-0 right-0 flex justify-between items-center p-4 z-20">
-        <Button
-          variant="ghost"
-          size="icon"
-          className="rounded-full bg-black/50 text-white hover:bg-black/70"
-          onClick={cancelCapture}
-        >
-          <X className="h-6 w-6" />
-          <span className="sr-only">Cancel</span>
-        </Button>
-
-        <div className="flex items-center space-x-4">
-          <Button
-            variant="ghost"
-            size="icon"
-            className="rounded-full bg-black/50 text-white hover:bg-black/70"
-            onClick={toggleFlash}
-          >
-            {isFlashOn ? <Zap className="h-6 w-6 text-yellow-400" /> : <ZapOff className="h-6 w-6" />}
-            <span className="sr-only">Toggle Flash</span>
-          </Button>
-        </div>
-      </div>
-
-      {/* Page Indicator */}
-      <div className="absolute top-16 left-0 right-0 flex justify-center z-20">
-        <div className="px-3 py-1 bg-black/50 rounded-full text-white text-sm">Page {pageCount}</div>
-      </div>
-
-      {/* Bottom Controls */}
-      <div className="absolute bottom-0 left-0 right-0 flex flex-col items-center p-6 z-20">
-        {showAddAnother ? (
-          <div className="flex space-x-4 mb-6">
-            <Button variant="outline" className="bg-white text-black hover:bg-gray-200" onClick={addAnotherPage}>
-              Add Another Page
-            </Button>
-            <Button className="bg-emerald-600 hover:bg-emerald-700" onClick={continueToPreview}>
-              Continue
-            </Button>
-          </div>
-        ) : (
-          <Button
-            size="lg"
-            className={cn(
-              "w-16 h-16 rounded-full flex items-center justify-center",
-              "bg-white hover:bg-gray-200 border-4 border-gray-300",
-            )}
-            onClick={captureImage}
-            disabled={!hasCamera}
-          >
-            <Camera className="h-8 w-8 text-black" />
-            <span className="sr-only">Capture</span>
-          </Button>
-        )}
-      </div>
     </div>
   )
 }
@@ -8504,107 +7457,6 @@ export function CreateUserDialog() {
 }
 </file>
 
-<file path="components/dashboard-chart.tsx">
-"use client"
-
-import { useEffect, useState } from "react"
-import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts"
-
-export function DashboardChart() {
-  const [mounted, setMounted] = useState(false)
-
-  useEffect(() => {
-    setMounted(true)
-  }, [])
-
-  if (!mounted) {
-    return (
-      <div className="flex items-center justify-center h-[350px] w-full bg-muted/20 rounded-md">
-        <p className="text-muted-foreground">Loading chart...</p>
-      </div>
-    )
-  }
-
-  return (
-    <div className="h-[350px] w-full">
-      <ResponsiveContainer width="100%" height="100%">
-        <BarChart data={data} margin={{ top: 10, right: 10, left: 10, bottom: 20 }}>
-          <XAxis dataKey="name" stroke="#888888" fontSize={12} tickLine={false} axisLine={false} />
-          <YAxis
-            stroke="#888888"
-            fontSize={12}
-            tickLine={false}
-            axisLine={false}
-            tickFormatter={(value) => `R${value}`}
-          />
-          <CartesianGrid strokeDasharray="3 3" vertical={false} />
-          <Tooltip
-            formatter={(value) => [`R${value}`, "Amount"]}
-            contentStyle={{
-              backgroundColor: "hsl(var(--background))",
-              borderColor: "hsl(var(--border))",
-              borderRadius: "var(--radius)",
-            }}
-          />
-          <Bar dataKey="total" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
-        </BarChart>
-      </ResponsiveContainer>
-    </div>
-  )
-}
-
-const data = [
-  {
-    name: "Jan",
-    total: 45000,
-  },
-  {
-    name: "Feb",
-    total: 63500,
-  },
-  {
-    name: "Mar",
-    total: 58200,
-  },
-  {
-    name: "Apr",
-    total: 72800,
-  },
-  {
-    name: "May",
-    total: 85600,
-  },
-  {
-    name: "Jun",
-    total: 92400,
-  },
-  {
-    name: "Jul",
-    total: 105200,
-  },
-  {
-    name: "Aug",
-    total: 91000,
-  },
-  {
-    name: "Sep",
-    total: 97500,
-  },
-  {
-    name: "Oct",
-    total: 110800,
-  },
-  {
-    name: "Nov",
-    total: 142500,
-  },
-  {
-    name: "Dec",
-    total: 168000,
-  },
-]
-</file>
-
 <file path="components/footer.tsx">
 import { Wifi, WifiOff } from "lucide-react"
 
@@ -8694,247 +7546,6 @@ export function Header() {
 }
 </file>
 
-<file path="components/recent-transactions.tsx">
-import { Avatar, AvatarFallback } from "@/components/ui/avatar"
-import { ArrowUpRight, ArrowDownLeft } from "lucide-react"
-
-export function RecentTransactions() {
-  return (
-    <div className="space-y-8">
-      {transactions.map((transaction) => (
-        <div key={transaction.id} className="flex items-center">
-          <Avatar className="h-9 w-9 border">
-            {transaction.type === "credit" ? (
-              <ArrowDownLeft className="h-4 w-4 text-green-500" />
-            ) : (
-              <ArrowUpRight className="h-4 w-4 text-red-500" />
-            )}
-            <AvatarFallback>{transaction.name[0]}</AvatarFallback>
-          </Avatar>
-          <div className="ml-4 space-y-1">
-            <p className="text-sm font-medium leading-none">{transaction.name}</p>
-            <p className="text-sm text-muted-foreground">{transaction.date}</p>
-          </div>
-          <div className={`ml-auto font-medium ${transaction.type === "credit" ? "text-green-500" : "text-red-500"}`}>
-            {transaction.type === "credit" ? "+" : "-"}R {transaction.amount.toFixed(2)}
-          </div>
-        </div>
-      ))}
-    </div>
-  )
-}
-
-const transactions = [
-  {
-    id: "1",
-    name: "Thabo Mbeki",
-    amount: 250.0,
-    date: "2023-11-14",
-    type: "credit",
-  },
-  {
-    id: "2",
-    name: "Nomzamo Mbatha",
-    amount: 1000.0,
-    date: "2023-11-13",
-    type: "debit",
-  },
-  {
-    id: "3",
-    name: "Siya Kolisi",
-    amount: 500.0,
-    date: "2023-11-12",
-    type: "credit",
-  },
-  {
-    id: "4",
-    name: "Trevor Noah",
-    amount: 750.0,
-    date: "2023-11-11",
-    type: "debit",
-  },
-  {
-    id: "5",
-    name: "Patrice Motsepe",
-    amount: 2500.0,
-    date: "2023-11-10",
-    type: "credit",
-  },
-]
-</file>
-
-<file path="components/sidebar-provider.tsx">
-"use client"
-
-import { createContext, useContext, useState, type ReactNode } from "react"
-
-type SidebarContextType = {
-  isOpen: boolean
-  toggle: () => void
-}
-
-const SidebarContext = createContext<SidebarContextType | undefined>(undefined)
-
-export function SidebarProvider({ children }: { children: ReactNode }) {
-  const [isOpen, setIsOpen] = useState(false)
-
-  const toggle = () => {
-    setIsOpen(!isOpen)
-  }
-
-  return <SidebarContext.Provider value={{ isOpen, toggle }}>{children}</SidebarContext.Provider>
-}
-
-export function useSidebar() {
-  const context = useContext(SidebarContext)
-  if (context === undefined) {
-    throw new Error("useSidebar must be used within a SidebarProvider")
-  }
-  return context
-}
-</file>
-
-<file path="components/sidebar.tsx">
-"use client"
-
-import Link from "next/link"
-import { usePathname } from "next/navigation"
-import { useSidebar } from "./sidebar-provider"
-import { cn } from "@/lib/utils"
-import { LayoutDashboard, Users, Wallet, BarChart3, Settings, HelpCircle, LogOut, Menu } from "lucide-react"
-import { Button } from "@/components/ui/button"
-
-export function Sidebar() {
-  const pathname = usePathname()
-  const { isOpen, toggle } = useSidebar()
-
-  return (
-    <>
-      <div
-        className={cn("fixed inset-0 z-50 bg-background/80 backdrop-blur-sm lg:hidden", isOpen ? "block" : "hidden")}
-        onClick={toggle}
-      />
-      <div
-        className={cn(
-          "fixed inset-y-0 left-0 z-50 w-72 bg-background",
-          "transition-transform duration-300 ease-in-out",
-          "border-r",
-          isOpen ? "translate-x-0" : "-translate-x-full",
-          "lg:translate-x-0",
-        )}
-      >
-        <div className="flex h-14 items-center border-b px-4">
-          <span className="text-lg font-semibold">Sambo Admin</span>
-          <Button variant="ghost" size="icon" className="ml-auto lg:hidden" onClick={toggle}>
-            <Menu className="h-5 w-5" />
-          </Button>
-        </div>
-        <div className="flex flex-col h-[calc(100vh-3.5rem)]">
-          <div className="flex-1 overflow-auto py-2">
-            <nav className="grid gap-1 px-2">
-              {navItems.map((item, index) => (
-                <Link
-                  key={index}
-                  href={item.href}
-                  className={cn(
-                    "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium hover:bg-accent hover:text-accent-foreground",
-                    pathname === item.href ? "bg-accent text-accent-foreground" : "text-muted-foreground",
-                  )}
-                >
-                  <item.icon className="h-5 w-5" />
-                  <span>{item.name}</span>
-                  {item.badge && (
-                    <span className="ml-auto flex h-5 w-5 items-center justify-center rounded-full bg-primary text-[0.625rem] font-medium text-primary-foreground">
-                      {item.badge}
-                    </span>
-                  )}
-                </Link>
-              ))}
-            </nav>
-          </div>
-          <div className="border-t p-2">
-            <nav className="grid gap-1">
-              {footerItems.map((item, index) => (
-                <div key={index}>
-                  {item.subItems ? (
-                    <div className="space-y-1">
-                      <Link
-                        href={item.href}
-                        className={cn(
-                          "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium hover:bg-accent hover:text-accent-foreground",
-                          pathname === item.href ? "bg-accent text-accent-foreground" : "text-muted-foreground",
-                        )}
-                      >
-                        <item.icon className="h-5 w-5" />
-                        <span>{item.name}</span>
-                      </Link>
-                      <div className="pl-4 space-y-1">
-                        {item.subItems.map((subItem, subIndex) => (
-                          <Link
-                            key={subIndex}
-                            href={subItem.href}
-                            className={cn(
-                              "flex items-center gap-3 rounded-md px-3 py-1.5 text-sm hover:bg-accent hover:text-accent-foreground",
-                              pathname === subItem.href ? "bg-accent text-accent-foreground" : "text-muted-foreground",
-                            )}
-                          >
-                            <span>{subItem.name}</span>
-                            {subItem.description && (
-                              <span className="ml-auto text-xs text-muted-foreground">{subItem.description}</span>
-                            )}
-                          </Link>
-                        ))}
-                      </div>
-                    </div>
-                  ) : (
-                    <Link
-                      href={item.href}
-                      className={cn(
-                        "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium hover:bg-accent hover:text-accent-foreground",
-                        pathname === item.href ? "bg-accent text-accent-foreground" : "text-muted-foreground",
-                      )}
-                    >
-                      <item.icon className="h-5 w-5" />
-                      <span>{item.name}</span>
-                      {item.description && (
-                        <span className="ml-auto text-xs text-muted-foreground">{item.description}</span>
-                      )}
-                    </Link>
-                  )}
-                </div>
-              ))}
-            </nav>
-          </div>
-        </div>
-      </div>
-    </>
-  )
-}
-
-const navItems = [
-  { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
-  { name: "Users", href: "/users", icon: Users, badge: "8" },
-  { name: "Transactions", href: "/transactions", icon: Wallet },
-  { name: "Analytics", href: "/analytics", icon: BarChart3 },
-]
-
-const footerItems = [
-  {
-    name: "Settings",
-    href: "/settings",
-    icon: Settings,
-    subItems: [
-      { name: "Profile", href: "/settings/profile", description: "Update your details" },
-      { name: "Security", href: "/settings/security", description: "Manage your password" },
-      { name: "Communication", href: "/settings/communication", description: "Email and phone" },
-      { name: "Permissions", href: "/settings/permissions", description: "Access control" },
-    ],
-  },
-  { name: "Help", href: "/help", icon: HelpCircle, description: "Get support" },
-  { name: "Logout", href: "/logout", icon: LogOut, description: "Exit the app" },
-]
-</file>
-
 <file path="components/theme-provider.tsx">
 'use client'
 
@@ -8947,113 +7558,6 @@ import {
 export function ThemeProvider({ children, ...props }: ThemeProviderProps) {
   return <NextThemesProvider {...props}>{children}</NextThemesProvider>
 }
-</file>
-
-<file path="components/user-transactions.tsx">
-import { Avatar, AvatarFallback } from "@/components/ui/avatar"
-import { ArrowUpRight, ArrowDownLeft } from "lucide-react"
-import { Card } from "@/components/ui/card"
-
-export function UserTransactions({ userId }: { userId: string }) {
-  // Filter transactions for this user
-  const userTransactions = transactions.filter((t) => t.userId === userId)
-
-  if (userTransactions.length === 0) {
-    return <div className="text-center py-8 text-muted-foreground">No transactions found for this user.</div>
-  }
-
-  return (
-    <div className="space-y-4">
-      {userTransactions.map((transaction) => (
-        <Card key={transaction.id} className="p-4">
-          <div className="flex items-center">
-            <Avatar className="h-9 w-9 border">
-              {transaction.type === "credit" ? (
-                <ArrowDownLeft className="h-4 w-4 text-green-500" />
-              ) : (
-                <ArrowUpRight className="h-4 w-4 text-red-500" />
-              )}
-              <AvatarFallback>{transaction.description[0]}</AvatarFallback>
-            </Avatar>
-            <div className="ml-4 space-y-1">
-              <p className="text-sm font-medium leading-none">{transaction.description}</p>
-              <p className="text-sm text-muted-foreground">
-                {transaction.date} • {transaction.time}
-              </p>
-            </div>
-            <div className={`ml-auto font-medium ${transaction.type === "credit" ? "text-green-500" : "text-red-500"}`}>
-              {transaction.type === "credit" ? "+" : "-"}R {transaction.amount.toFixed(2)}
-            </div>
-          </div>
-          <div className="mt-2 text-xs text-muted-foreground">Reference: {transaction.reference}</div>
-        </Card>
-      ))}
-    </div>
-  )
-}
-
-const transactions = [
-  {
-    id: "t1",
-    userId: "1",
-    description: "Salary Deposit",
-    amount: 5000.0,
-    date: "2023-11-14",
-    time: "09:45 AM",
-    type: "credit",
-    reference: "SAL-NOV-2023",
-  },
-  {
-    id: "t2",
-    userId: "1",
-    description: "Grocery Shopping",
-    amount: 750.0,
-    date: "2023-11-12",
-    time: "02:30 PM",
-    type: "debit",
-    reference: "POS-CHECKERS-1234",
-  },
-  {
-    id: "t3",
-    userId: "1",
-    description: "Electricity Bill",
-    amount: 450.0,
-    date: "2023-11-10",
-    time: "10:15 AM",
-    type: "debit",
-    reference: "UTIL-ESKOM-5678",
-  },
-  {
-    id: "t4",
-    userId: "2",
-    description: "Business Payment",
-    amount: 12500.0,
-    date: "2023-11-15",
-    time: "11:20 AM",
-    type: "credit",
-    reference: "BUS-PAYMENT-9012",
-  },
-  {
-    id: "t5",
-    userId: "2",
-    description: "Car Insurance",
-    amount: 1200.0,
-    date: "2023-11-05",
-    time: "08:45 AM",
-    type: "debit",
-    reference: "INS-OUTSURANCE-3456",
-  },
-  {
-    id: "t6",
-    userId: "3",
-    description: "Sponsorship Payment",
-    amount: 25000.0,
-    date: "2023-11-08",
-    time: "03:15 PM",
-    type: "credit",
-    reference: "SPON-NIKE-7890",
-  },
-]
 </file>
 
 <file path="hooks/use-mobile.tsx">
@@ -9688,6 +8192,167 @@ module.exports = {
   },
   "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],
   "exclude": ["node_modules"]
+}
+</file>
+
+<file path="app/new-entry/page.tsx">
+"use client"
+
+import { useState, useRef } from "react"
+import { useRouter } from "next/navigation"
+import { X, Upload, Camera } from "lucide-react"
+import { Button } from "@/components/ui/button"
+import { cn } from "@/lib/utils"
+
+export default function UploadScreen() {
+  const router = useRouter()
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const canvasRef = useRef<HTMLCanvasElement>(null)
+  const [pageCount, setPageCount] = useState(1)
+  const [capturedImages, setCapturedImages] = useState<string[]>([])
+  const [showAddAnother, setShowAddAnother] = useState(false)
+  const [currentImage, setCurrentImage] = useState<string | null>(null)
+
+  // Handle file selection
+  const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = event.target.files
+    if (!files || files.length === 0) return
+
+    const file = files[0]
+    if (!file.type.startsWith('image/')) {
+      alert('Please select an image file')
+      return
+    }
+
+    const reader = new FileReader()
+    reader.onload = (e) => {
+      if (e.target?.result) {
+        const imageDataUrl = e.target.result.toString()
+        setCurrentImage(imageDataUrl)
+        // Process the image once it's loaded
+        processImage(imageDataUrl)
+      }
+    }
+    reader.readAsDataURL(file)
+  }
+
+  // Process the image once selected
+  const processImage = (imageDataUrl: string) => {
+    // Add to captured images array
+    setCapturedImages([...capturedImages, imageDataUrl])
+    
+    // Show "Add Another Page" option
+    setShowAddAnother(true)
+  }
+
+  // Trigger file input click
+  const triggerFileUpload = () => {
+    fileInputRef.current?.click()
+  }
+
+  // Add another page
+  const addAnotherPage = () => {
+    setPageCount(pageCount + 1)
+    setShowAddAnother(false)
+    setCurrentImage(null)
+    
+    // Reset file input
+    if (fileInputRef.current) {
+      fileInputRef.current.value = ''
+    }
+  }
+
+  // Continue to preview screen
+  const continueToPreview = () => {
+    // In a real app, you would pass the captured images to the next screen
+    // For now, we'll just navigate and log the number of images
+    console.log(`Captured ${capturedImages.length} images`)
+    router.push("/preview")
+  }
+
+  // Cancel and return to home
+  const cancelUpload = () => {
+    router.push("/")
+  }
+
+  return (
+    <div className="relative flex flex-col h-screen bg-gray-900">
+      {/* Hidden file input */}
+      <input 
+        type="file" 
+        ref={fileInputRef} 
+        className="hidden" 
+        accept="image/*"
+        onChange={handleFileSelect}
+      />
+
+      {/* Image Preview */}
+      <div className="absolute inset-0 flex items-center justify-center z-0">
+        {currentImage ? (
+          <div className="w-4/5 h-3/5 relative">
+            <img 
+              src={currentImage} 
+              alt="Uploaded page" 
+              className="w-full h-full object-contain"
+            />
+          </div>
+        ) : (
+          <div className="w-4/5 h-3/5 border-2 border-dashed border-gray-400 rounded-md flex flex-col items-center justify-center text-white text-center p-6">
+            <Upload className="h-12 w-12 mb-4 text-gray-300" />
+            <h3 className="text-xl font-semibold mb-2">Upload Image</h3>
+            <p className="text-gray-400">Click the button below to upload a page</p>
+          </div>
+        )}
+      </div>
+
+      {/* Hidden canvas for processing if needed */}
+      <canvas ref={canvasRef} className="hidden" />
+
+      {/* Top Controls */}
+      <div className="absolute top-0 left-0 right-0 flex justify-between items-center p-4 z-20">
+        <Button
+          variant="ghost"
+          size="icon"
+          className="rounded-full bg-black/50 text-white hover:bg-black/70"
+          onClick={cancelUpload}
+        >
+          <X className="h-6 w-6" />
+          <span className="sr-only">Cancel</span>
+        </Button>
+      </div>
+
+      {/* Page Indicator */}
+      <div className="absolute top-16 left-0 right-0 flex justify-center z-20">
+        <div className="px-3 py-1 bg-black/50 rounded-full text-white text-sm">Page {pageCount}</div>
+      </div>
+
+      {/* Bottom Controls */}
+      <div className="absolute bottom-0 left-0 right-0 flex flex-col items-center p-6 z-20">
+        {showAddAnother ? (
+          <div className="flex space-x-4 mb-6">
+            <Button variant="outline" className="bg-white text-black hover:bg-gray-200" onClick={addAnotherPage}>
+              Add Another Page
+            </Button>
+            <Button className="bg-emerald-600 hover:bg-emerald-700" onClick={continueToPreview}>
+              Continue
+            </Button>
+          </div>
+        ) : (
+          <Button
+            size="lg"
+            className={cn(
+              "w-16 h-16 rounded-full flex items-center justify-center",
+              "bg-white hover:bg-gray-200 border-4 border-gray-300",
+            )}
+            onClick={triggerFileUpload}
+          >
+            <Upload className="h-8 w-8 text-black" />
+            <span className="sr-only">Upload</span>
+          </Button>
+        )}
+      </div>
+    </div>
+  )
 }
 </file>
 

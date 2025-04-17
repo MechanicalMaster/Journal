@@ -3,11 +3,14 @@ import { ref, uploadString, getDownloadURL } from 'firebase/storage';
 import { storage } from '@/lib/firebase';
 
 export async function POST(request: NextRequest) {
+  console.log('Upload image API route started');
+  
   try {
     // Parse request body
     const { imageData, requestUserId } = await request.json();
     
     if (!imageData) {
+      console.error('No image data provided');
       return NextResponse.json({ 
         success: false, 
         error: 'No image data provided' 
@@ -15,6 +18,7 @@ export async function POST(request: NextRequest) {
     }
     
     if (!requestUserId) {
+      console.error('No user ID provided');
       return NextResponse.json({ 
         success: false, 
         error: 'No user ID provided' 
@@ -28,17 +32,25 @@ export async function POST(request: NextRequest) {
     console.log(`Processing image upload for user: ${userId.substring(0, 5)}...`);
     
     try {
-      // Generate a unique filename
+      // Generate a unique filename with timestamp and random string to prevent collisions
       const timestamp = Date.now();
-      const filename = `journal-images/${userId}/${timestamp}.jpg`;
+      const randomStr = Math.random().toString(36).substring(2, 8);
+      const filename = `journal-images/${userId}/${timestamp}-${randomStr}.jpg`;
+      
+      console.log(`Creating storage reference: ${filename}`);
       const storageRef = ref(storage, filename);
       
       // Remove the data URL prefix (e.g., "data:image/jpeg;base64,")
-      const base64Data = imageData.split(',')[1];
+      let base64Data = imageData;
+      if (base64Data.includes(',')) {
+        base64Data = imageData.split(',')[1];
+      }
       
+      console.log('Uploading image to Firebase Storage...');
       // Upload the image
       await uploadString(storageRef, base64Data, 'base64');
       
+      console.log('Getting download URL...');
       // Get the download URL
       const downloadURL = await getDownloadURL(storageRef);
       
@@ -49,10 +61,13 @@ export async function POST(request: NextRequest) {
         url: downloadURL
       });
     } catch (uploadError: any) {
-      console.error('Firebase storage error:', uploadError);
+      console.error('Firebase storage error details:', uploadError.code, uploadError.message);
+      console.error('Full storage error:', JSON.stringify(uploadError, null, 2));
+      
       return NextResponse.json({ 
         success: false,
-        error: `Storage error: ${uploadError.message || 'Unknown error'}` 
+        error: `Storage error: ${uploadError.message || 'Unknown error'}`,
+        errorCode: uploadError.code || 'unknown'
       }, { status: 500 });
     }
   } catch (error: any) {

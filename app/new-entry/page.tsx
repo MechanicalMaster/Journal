@@ -41,7 +41,9 @@ export default function CameraScreen() {
         }
       } catch (err) {
         console.error("Error accessing camera:", err)
-        setCameraError("Could not access camera. Please check permissions.")
+         const errorMessage = err instanceof Error ? err.message : "Could not access camera. Please check permissions.";
+        setCameraError(errorMessage)
+
         setHasCamera(false)
       }
     }

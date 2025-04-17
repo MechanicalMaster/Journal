@@ -30,11 +30,22 @@ export function ThemeProvider({
   enableSystem = true,
   disableTransitionOnChange = false,
 }: ThemeProviderProps) {
-  const [theme, setTheme] = useState<Theme>(
-    () => (localStorage.getItem(storageKey) as Theme) || defaultTheme
-  );
+  const [theme, setTheme] = useState<Theme>(defaultTheme);
+  
+  // Initialize theme state from localStorage, but only on the client
+  useEffect(() => {
+    const storedTheme = typeof window !== 'undefined' 
+      ? localStorage.getItem(storageKey) as Theme 
+      : null;
+      
+    if (storedTheme) {
+      setTheme(storedTheme);
+    }
+  }, [storageKey]);
 
   useEffect(() => {
+    if (typeof window === 'undefined') return;
+    
     const root = window.document.documentElement;
 
     root.classList.remove("light", "dark");
@@ -65,30 +76,32 @@ export function ThemeProvider({
   }, [theme, attribute, enableSystem, disableTransitionOnChange]);
 
   useEffect(() => {
-    if (enableSystem) {
-      const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
-      
-      const handleChange = () => {
-        if (theme === "system") {
-          const root = window.document.documentElement;
-          const systemTheme = mediaQuery.matches ? "dark" : "light";
-          
-          root.classList.remove("light", "dark");
-          root.classList.add(systemTheme);
-          root.setAttribute(attribute, systemTheme);
-        }
-      };
-      
-      mediaQuery.addEventListener("change", handleChange);
-      
-      return () => mediaQuery.removeEventListener("change", handleChange);
-    }
+    if (typeof window === 'undefined' || !enableSystem) return;
+    
+    const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
+    
+    const handleChange = () => {
+      if (theme === "system") {
+        const root = window.document.documentElement;
+        const systemTheme = mediaQuery.matches ? "dark" : "light";
+        
+        root.classList.remove("light", "dark");
+        root.classList.add(systemTheme);
+        root.setAttribute(attribute, systemTheme);
+      }
+    };
+    
+    mediaQuery.addEventListener("change", handleChange);
+    
+    return () => mediaQuery.removeEventListener("change", handleChange);
   }, [theme, attribute, enableSystem]);
 
   const value = {
     theme,
     setTheme: (newTheme: Theme) => {
-      localStorage.setItem(storageKey, newTheme);
+      if (typeof window !== 'undefined') {
+        localStorage.setItem(storageKey, newTheme);
+      }
       setTheme(newTheme);
     },
   };

@@ -13,6 +13,8 @@ export default function HomePage() {
 
   // Check online status
   useEffect(() => {
+    if (typeof window === 'undefined') return;
+    
     const handleOnline = () => setIsOnline(true);
     const handleOffline = () => setIsOnline(false);
 

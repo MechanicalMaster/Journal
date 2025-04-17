@@ -1,113 +1,67 @@
 "use client"
 
-import { useState, useRef, useEffect } from "react"
+import { useState, useRef } from "react"
 import { useRouter } from "next/navigation"
-import { X, Zap, ZapOff, Camera } from "lucide-react"
+import { X, Upload, Camera } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 
-export default function CameraScreen() {
+export default function UploadScreen() {
   const router = useRouter()
-  const videoRef = useRef<HTMLVideoElement>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
-  const [hasCamera, setHasCamera] = useState(false)
-  const [isFlashOn, setIsFlashOn] = useState(false)
   const [pageCount, setPageCount] = useState(1)
   const [capturedImages, setCapturedImages] = useState<string[]>([])
   const [showAddAnother, setShowAddAnother] = useState(false)
-  const [cameraError, setCameraError] = useState<string | null>(null)
-  const [isCameraSupported, setIsCameraSupported] = useState(true)
+  const [currentImage, setCurrentImage] = useState<string | null>(null)
 
-  // Check if getUserMedia is supported
-  useEffect(() => {
-    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-      setIsCameraSupported(false)
-      setCameraError("Camera API not supported in this browser.")
-      console.error("getUserMedia is not supported in this browser")
+  // Handle file selection
+  const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = event.target.files
+    if (!files || files.length === 0) return
+
+    const file = files[0]
+    if (!file.type.startsWith('image/')) {
+      alert('Please select an image file')
       return
     }
-  }, [])
 
-  // Initialize camera
-  useEffect(() => {
-    if (!isCameraSupported) return
-
-    let stream: MediaStream | null = null
-
-    async function setupCamera() {
-      try {
-        // Request camera access with basic constraints - torch/flash is generally not well-supported in browsers
-        const constraints = {
-          video: {
-            facingMode: "environment", // Use back camera if available
-            width: { ideal: 1920 },
-            height: { ideal: 1080 },
-          },
-        }
-
-        // Simplified approach without torch which causes type issues
-        stream = await navigator.mediaDevices.getUserMedia(constraints)
-
-        if (videoRef.current) {
-          videoRef.current.srcObject = stream
-          setHasCamera(true)
-          setCameraError(null) // Clear any previous errors
-        }
-      } catch (err) {
-        console.error("Error accessing camera:", err)
-        setCameraError("Could not access camera. Please check permissions.")
-        setHasCamera(false)
+    const reader = new FileReader()
+    reader.onload = (e) => {
+      if (e.target?.result) {
+        const imageDataUrl = e.target.result.toString()
+        setCurrentImage(imageDataUrl)
+        // Process the image once it's loaded
+        processImage(imageDataUrl)
       }
     }
-
-    setupCamera()
-
-    // Cleanup function
-    return () => {
-      if (stream) {
-        stream.getTracks().forEach((track) => track.stop())
-      }
-    }
-  }, [isCameraSupported]) // Remove isFlashOn dependency since we're not using it now
-
-  // Toggle flash - note: this likely won't work in most browsers but keeping UI for consistency
-  const toggleFlash = () => {
-    setIsFlashOn(!isFlashOn)
-    // In a real implementation, we would need a more complex approach to handle flash
-    // Most browsers don't support controlling the camera flash via the web API
+    reader.readAsDataURL(file)
   }
 
-  // Capture image
-  const captureImage = () => {
-    if (videoRef.current && canvasRef.current) {
-      const video = videoRef.current
-      const canvas = canvasRef.current
+  // Process the image once selected
+  const processImage = (imageDataUrl: string) => {
+    // Add to captured images array
+    setCapturedImages([...capturedImages, imageDataUrl])
+    
+    // Show "Add Another Page" option
+    setShowAddAnother(true)
+  }
 
-      // Set canvas dimensions to match video
-      canvas.width = video.videoWidth
-      canvas.height = video.videoHeight
-
-      // Draw current video frame to canvas
-      const context = canvas.getContext("2d")
-      if (context) {
-        context.drawImage(video, 0, 0, canvas.width, canvas.height)
-
-        // Convert canvas to image data URL
-        const imageDataUrl = canvas.toDataURL("image/jpeg")
-
-        // Add to captured images array
-        setCapturedImages([...capturedImages, imageDataUrl])
-
-        // Show "Add Another Page" option
-        setShowAddAnother(true)
-      }
-    }
+  // Trigger file input click
+  const triggerFileUpload = () => {
+    fileInputRef.current?.click()
   }
 
   // Add another page
   const addAnotherPage = () => {
     setPageCount(pageCount + 1)
     setShowAddAnother(false)
+    setCurrentImage(null)
+    
+    // Reset file input
+    if (fileInputRef.current) {
+      fileInputRef.current.value = ''
+    }
   }
 
   // Continue to preview screen
@@ -119,28 +73,42 @@ export default function CameraScreen() {
   }
 
   // Cancel and return to home
-  const cancelCapture = () => {
+  const cancelUpload = () => {
     router.push("/")
   }
 
   return (
-    <div className="relative flex flex-col h-screen bg-black">
-      {/* Camera View */}
-      {hasCamera ? (
-        <video ref={videoRef} autoPlay playsInline className="absolute inset-0 w-full h-full object-cover z-0" />
-      ) : (
-        <div className="absolute inset-0 flex items-center justify-center bg-gray-900 text-white z-0">
-          {cameraError || "Camera not available"}
-        </div>
-      )}
+    <div className="relative flex flex-col h-screen bg-gray-900">
+      {/* Hidden file input */}
+      <input 
+        type="file" 
+        ref={fileInputRef} 
+        className="hidden" 
+        accept="image/*"
+        onChange={handleFileSelect}
+      />
 
-      {/* Hidden canvas for capturing images */}
-      <canvas ref={canvasRef} className="hidden" />
-
-      {/* Focus Frame */}
-      <div className="absolute inset-0 flex items-center justify-center z-10 pointer-events-none">
-        <div className="w-4/5 h-3/5 border-2 border-white rounded-md opacity-70"></div>
+      {/* Image Preview */}
+      <div className="absolute inset-0 flex items-center justify-center z-0">
+        {currentImage ? (
+          <div className="w-4/5 h-3/5 relative">
+            <img 
+              src={currentImage} 
+              alt="Uploaded page" 
+              className="w-full h-full object-contain"
+            />
+          </div>
+        ) : (
+          <div className="w-4/5 h-3/5 border-2 border-dashed border-gray-400 rounded-md flex flex-col items-center justify-center text-white text-center p-6">
+            <Upload className="h-12 w-12 mb-4 text-gray-300" />
+            <h3 className="text-xl font-semibold mb-2">Upload Image</h3>
+            <p className="text-gray-400">Click the button below to upload a page</p>
+          </div>
+        )}
       </div>
+
+      {/* Hidden canvas for processing if needed */}
+      <canvas ref={canvasRef} className="hidden" />
 
       {/* Top Controls */}
       <div className="absolute top-0 left-0 right-0 flex justify-between items-center p-4 z-20">
@@ -148,24 +116,11 @@ export default function CameraScreen() {
           variant="ghost"
           size="icon"
           className="rounded-full bg-black/50 text-white hover:bg-black/70"
-          onClick={cancelCapture}
+          onClick={cancelUpload}
         >
           <X className="h-6 w-6" />
           <span className="sr-only">Cancel</span>
         </Button>
-
-        <div className="flex items-center space-x-4">
-          <Button
-            variant="ghost"
-            size="icon"
-            className="rounded-full bg-black/50 text-white hover:bg-black/70"
-            onClick={toggleFlash}
-            disabled={!hasCamera}
-          >
-            {isFlashOn ? <Zap className="h-6 w-6 text-yellow-400" /> : <ZapOff className="h-6 w-6" />}
-            <span className="sr-only">Toggle Flash</span>
-          </Button>
-        </div>
       </div>
 
       {/* Page Indicator */}
@@ -191,11 +146,10 @@ export default function CameraScreen() {
               "w-16 h-16 rounded-full flex items-center justify-center",
               "bg-white hover:bg-gray-200 border-4 border-gray-300",
             )}
-            onClick={captureImage}
-            disabled={!hasCamera}
+            onClick={triggerFileUpload}
           >
-            <Camera className="h-8 w-8 text-black" />
-            <span className="sr-only">Capture</span>
+            <Upload className="h-8 w-8 text-black" />
+            <span className="sr-only">Upload</span>
           </Button>
         )}
       </div>

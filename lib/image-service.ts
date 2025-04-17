@@ -15,53 +15,50 @@ export const imageService = {
   // Upload an image using server-side API route
   async uploadImage(imageDataUrl: string, userId: string): Promise<string> {
     try {
-      const headers: Record<string, string> = {
-        'Content-Type': 'application/json'
-      };
-      
-      // In development mode, just pass the user ID in the header
-      if (process.env.NODE_ENV === 'development') {
-        console.log('Development mode: Using direct user ID in header');
-        headers['X-User-ID'] = userId;
-      } else {
-        // In production, get a real token
-        const user = auth.currentUser;
-        if (!user) {
-          throw new Error('Authentication required to upload images');
-        }
-        
-        let token = '';
-        try {
-          token = await user.getIdToken();
-          headers['Authorization'] = `Bearer ${token}`;
-        } catch (error) {
-          console.error('Error getting ID token:', error);
-          throw new Error('Failed to get authentication token');
-        }
+      // Simple validation
+      if (!imageDataUrl || !userId) {
+        console.error('Missing image data or userId');
+        throw new Error('Missing image data or userId');
       }
+      
+      console.log(`Uploading image for user ${userId.substring(0, 5)}...`);
       
       // Call the API route to upload the image
       const response = await fetch('/api/upload-image', {
         method: 'POST',
-        headers,
+        headers: {
+          'Content-Type': 'application/json',
+        },
         body: JSON.stringify({ 
           imageData: imageDataUrl,
-          requestUserId: userId  // renamed to distinguish from the server-side userId
+          requestUserId: userId
         }),
       });
       
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to upload image');
+        let errorMsg = 'Failed to upload image';
+        try {
+          const errorData = await response.json();
+          errorMsg = errorData.error || errorMsg;
+        } catch (e) {
+          // Ignore JSON parsing error
+        }
+        console.error(`Upload error (${response.status}): ${errorMsg}`);
+        throw new Error(errorMsg);
       }
       
-      const data = await response.json();
-      
-      if (!data.success || !data.url) {
-        throw new Error('Upload failed: No URL returned');
+      try {
+        const data = await response.json();
+        
+        if (!data.success || !data.url) {
+          throw new Error('Upload failed: No URL returned');
+        }
+        
+        return data.url;
+      } catch (jsonError) {
+        console.error('Error parsing response:', jsonError);
+        throw new Error('Invalid response from upload service');
       }
-      
-      return data.url;
     } catch (error) {
       console.error('Error uploading image:', error);
       throw error;

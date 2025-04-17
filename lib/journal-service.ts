@@ -97,24 +97,33 @@ export const journalService = {
       // Handle image uploads
       if (imageDataUrls && imageDataUrls.length > 0) {
         try {
-          imageUrls = await Promise.all(
-            imageDataUrls.map(imageDataUrl => imageService.uploadImage(imageDataUrl, userId))
-          );
-          console.log(`Successfully uploaded ${imageUrls.length} images`);
+          // Upload images in sequence to avoid overwhelming the system
+          for (const imageDataUrl of imageDataUrls) {
+            try {
+              const imageUrl = await imageService.uploadImage(imageDataUrl, userId);
+              if (imageUrl) {
+                console.log(`Successfully uploaded image: ${imageUrl.substring(0, 50)}...`);
+                imageUrls.push(imageUrl);
+              }
+            } catch (imageError) {
+              console.error('Error uploading individual image:', imageError);
+              // Continue with the next image
+            }
+          }
+          console.log(`Successfully uploaded ${imageUrls.length} of ${imageDataUrls.length} images`);
         } catch (error) {
           console.error('Error uploading images:', error);
           // Continue with empty image array if uploads fail
-          imageUrls = [];
         }
       }
 
-      // Create the journal entry
+      // Create the journal entry even if image uploads failed
       return await this.createEntry({
         userId,
-        title,
-        text,
+        title: title || 'Untitled Entry',
+        text: text || '',
         images: imageUrls,
-        qualifiers,
+        qualifiers: qualifiers || [],
       });
     } catch (error) {
       console.error('Error processing and saving entry:', error);

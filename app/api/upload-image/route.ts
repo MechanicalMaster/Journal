@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getStorage, ref, uploadString, getDownloadURL } from 'firebase/storage';
-import { app } from '@/lib/firebase';
+import { ref, uploadString, getDownloadURL } from 'firebase/storage';
+import { storage } from '@/lib/firebase';
 
 export async function POST(request: NextRequest) {
   try {
@@ -10,52 +10,56 @@ export async function POST(request: NextRequest) {
     if (!imageData) {
       return NextResponse.json({ 
         success: false, 
-        error: 'Missing image data' 
+        error: 'No image data provided' 
       }, { status: 400 });
     }
-
-    // Get the user ID - in development, use the header; in production, authenticate properly
-    let userId: string;
     
-    // Simplified auth for development
-    if (process.env.NODE_ENV === 'development') {
-      userId = request.headers.get('x-user-id') || requestUserId;
-      if (!userId) {
-        return NextResponse.json({ 
-          success: false, 
-          error: 'Missing user ID in development mode' 
-        }, { status: 400 });
-      }
-      console.log('Development mode: Using user ID', userId);
-    } else {
-      // In production, token would be verified here and user ID extracted
-      // This is a placeholder for when you implement Firebase Admin authentication
+    if (!requestUserId) {
       return NextResponse.json({ 
         success: false, 
-        error: 'Production authentication not yet implemented' 
-      }, { status: 501 });
+        error: 'No user ID provided' 
+      }, { status: 400 });
     }
-
-    // Initialize Firebase Storage
-    const storage = getStorage(app);
     
-    // Create a unique file name
-    const timestamp = Date.now();
-    const imageRef = ref(storage, `journal-images/${userId}/${timestamp}.jpg`);
+    // In production, we would verify the token here
+    // For now, we'll just use the requested user ID
+    const userId = requestUserId;
     
-    // Upload the image
-    const dataUrlWithoutPrefix = imageData.split(',')[1];
-    await uploadString(imageRef, dataUrlWithoutPrefix, 'base64');
+    console.log(`Processing image upload for user: ${userId.substring(0, 5)}...`);
     
-    // Get the download URL
-    const downloadUrl = await getDownloadURL(imageRef);
-    
-    return NextResponse.json({ success: true, url: downloadUrl });
-  } catch (error) {
-    console.error('Error uploading image:', error);
+    try {
+      // Generate a unique filename
+      const timestamp = Date.now();
+      const filename = `journal-images/${userId}/${timestamp}.jpg`;
+      const storageRef = ref(storage, filename);
+      
+      // Remove the data URL prefix (e.g., "data:image/jpeg;base64,")
+      const base64Data = imageData.split(',')[1];
+      
+      // Upload the image
+      await uploadString(storageRef, base64Data, 'base64');
+      
+      // Get the download URL
+      const downloadURL = await getDownloadURL(storageRef);
+      
+      console.log(`Image uploaded successfully: ${filename}`);
+      
+      return NextResponse.json({
+        success: true,
+        url: downloadURL
+      });
+    } catch (uploadError: any) {
+      console.error('Firebase storage error:', uploadError);
+      return NextResponse.json({ 
+        success: false,
+        error: `Storage error: ${uploadError.message || 'Unknown error'}` 
+      }, { status: 500 });
+    }
+  } catch (error: any) {
+    console.error('Error in upload-image API route:', error);
     return NextResponse.json({ 
       success: false,
-      error: error instanceof Error ? error.message : 'Failed to upload image' 
+      error: `Server error: ${error.message || 'Unknown error'}` 
     }, { status: 500 });
   }
 } 

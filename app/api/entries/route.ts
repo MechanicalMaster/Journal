@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/lib/firebase';
-import { collection, getDocs, query, where, orderBy } from 'firebase/firestore';
 
+// This is a server-side API route, but since we've moved to localStorage
+// this API is now for demonstration purposes only
+// Real data access would happen client-side directly through the journal service
 export async function GET(request: NextRequest) {
   try {
     // Get user ID from query parameters
@@ -15,33 +16,21 @@ export async function GET(request: NextRequest) {
       }, { status: 400 });
     }
     
-    // Get journal entries
-    const entriesRef = collection(db, 'journalEntries');
-    const q = query(
-      entriesRef,
-      where('userId', '==', userId),
-      orderBy('createdAt', 'desc')
-    );
-    
-    const snapshot = await getDocs(q);
-    
-    const entries = snapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data(),
-      // Convert timestamps to strings for proper JSON serialization
-      createdAt: doc.data().createdAt?.toDate?.().toISOString() || null,
-      updatedAt: doc.data().updatedAt?.toDate?.().toISOString() || null,
-    }));
+    // Since localStorage is not available on the server,
+    // we'll return an empty array with a message
+    // In a real application, you would need to use a database or
+    // other server-side storage mechanism
     
     return NextResponse.json({
       success: true,
-      entries
+      entries: [],
+      message: "Data is now stored in localStorage. Please use client-side journal service to access entries."
     });
   } catch (error: any) {
-    console.error('Error fetching entries:', error);
+    console.error('Error handling entries request:', error);
     return NextResponse.json({ 
       success: false,
-      error: `Error fetching entries: ${error.message || 'Unknown error'}` 
+      error: `Error handling entries request: ${error.message || 'Unknown error'}` 
     }, { status: 500 });
   }
 } 

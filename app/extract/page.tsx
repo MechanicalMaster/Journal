@@ -4,14 +4,17 @@ import type React from "react"
 
 import { useState, useEffect, useRef } from "react"
 import { useRouter } from "next/navigation"
-import { ArrowLeft, Save, RefreshCw, Edit, Loader2 } from "lucide-react"
+import { ArrowLeft, Save, RefreshCw, Edit, Loader2, ChevronDown } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
+import { Input } from "@/components/ui/input"
 import { cn } from "@/lib/utils"
 import { useToast } from "@/components/ui/use-toast"
 import { imageService } from "@/lib/image-service"
 import { useAuth } from "@/lib/auth-context"
 import { journalService } from "@/lib/journal-service"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Label } from "@/components/ui/label"
 
 export default function TextExtractionScreen() {
   const router = useRouter()
@@ -25,6 +28,13 @@ export default function TextExtractionScreen() {
   const textAreaRef = useRef<HTMLTextAreaElement>(null)
   const [highlightedText, setHighlightedText] = useState<React.ReactNode>(null)
   const [currentImage, setCurrentImage] = useState<string | null>(null)
+  
+  // Qualifiers state
+  const [showQualifiers, setShowQualifiers] = useState(false)
+  const [tone, setTone] = useState("")
+  const [topic, setTopic] = useState("")
+  const [mood, setMood] = useState("")
+  const [context, setContext] = useState("")
 
   // Process the image using OpenAI API
   useEffect(() => {
@@ -161,6 +171,10 @@ export default function TextExtractionScreen() {
     }
   }
 
+  const handleShowQualifiers = () => {
+    setShowQualifiers(true)
+  }
+
   const handleSaveText = async () => {
     if (!user) {
       toast({
@@ -179,13 +193,20 @@ export default function TextExtractionScreen() {
       // Create a title from the first few words of the text
       const title = extractedText.split(' ').slice(0, 5).join(' ') + '...'
 
+      // Create qualifiers array
+      const qualifiers = []
+      if (tone) qualifiers.push(`Tone: ${tone}`)
+      if (topic) qualifiers.push(`Topic: ${topic}`)
+      if (mood) qualifiers.push(`Mood: ${mood}`)
+      if (context) qualifiers.push(`Context: ${context}`)
+
       // Save the entry using the journal service
       await journalService.processAndSaveEntry(
         user.uid,
         title,
         extractedText,
         imageDataUrls,
-        [] // Qualifiers will be added in the next step
+        qualifiers // Now passing the qualifiers
       )
 
       // Clear localStorage
@@ -309,6 +330,75 @@ export default function TextExtractionScreen() {
           )}
         </div>
 
+        {showQualifiers && !isLoading && !ocrFailed && (
+          <div className="mt-6 bg-white dark:bg-gray-800 p-4 rounded-md border border-gray-200 dark:border-gray-700">
+            <h2 className="text-lg font-semibold mb-4">Qualifiers</h2>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="tone">Tone</Label>
+                <Select value={tone} onValueChange={setTone}>
+                  <SelectTrigger id="tone">
+                    <SelectValue placeholder="Select tone" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Reflective">Reflective</SelectItem>
+                    <SelectItem value="Analytical">Analytical</SelectItem>
+                    <SelectItem value="Formal">Formal</SelectItem>
+                    <SelectItem value="Informal">Informal</SelectItem>
+                    <SelectItem value="Critical">Critical</SelectItem>
+                    <SelectItem value="Humorous">Humorous</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              
+              <div className="space-y-2">
+                <Label htmlFor="topic">Topic</Label>
+                <Select value={topic} onValueChange={setTopic}>
+                  <SelectTrigger id="topic">
+                    <SelectValue placeholder="Select topic" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Work">Work</SelectItem>
+                    <SelectItem value="Personal">Personal</SelectItem>
+                    <SelectItem value="Health">Health</SelectItem>
+                    <SelectItem value="Finance">Finance</SelectItem>
+                    <SelectItem value="Education">Education</SelectItem>
+                    <SelectItem value="Creativity">Creativity</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              
+              <div className="space-y-2">
+                <Label htmlFor="mood">Mood</Label>
+                <Select value={mood} onValueChange={setMood}>
+                  <SelectTrigger id="mood">
+                    <SelectValue placeholder="Select mood" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Calm">Calm</SelectItem>
+                    <SelectItem value="Energetic">Energetic</SelectItem>
+                    <SelectItem value="Happy">Happy</SelectItem>
+                    <SelectItem value="Sad">Sad</SelectItem>
+                    <SelectItem value="Anxious">Anxious</SelectItem>
+                    <SelectItem value="Relaxed">Relaxed</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              
+              <div className="space-y-2">
+                <Label htmlFor="context">Context</Label>
+                <Input 
+                  id="context" 
+                  placeholder="Enter a context (e.g., Morning coffee break notes)"
+                  value={context}
+                  onChange={(e) => setContext(e.target.value)}
+                />
+              </div>
+            </div>
+          </div>
+        )}
+
         <div className="mt-6 flex flex-col sm:flex-row gap-3 justify-end">
           {!ocrFailed && !isLoading && (
             <>
@@ -324,10 +414,17 @@ export default function TextExtractionScreen() {
                 <RefreshCw className="h-4 w-4 mr-2" />
                 Retry OCR
               </Button>
-              <Button onClick={handleSaveText} disabled={!extractedText.trim()}>
-                <Save className="h-4 w-4 mr-2" />
-                Save Text
-              </Button>
+              {!showQualifiers ? (
+                <Button onClick={handleShowQualifiers} disabled={!extractedText.trim()}>
+                  <ChevronDown className="h-4 w-4 mr-2" />
+                  Add Qualifiers
+                </Button>
+              ) : (
+                <Button onClick={handleSaveText} disabled={!extractedText.trim()}>
+                  <Save className="h-4 w-4 mr-2" />
+                  Save Text
+                </Button>
+              )}
             </>
           )}
         </div>

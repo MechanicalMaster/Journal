@@ -52,6 +52,18 @@ export const journalService = {
     }
   },
 
+  // Get a single entry by ID
+  async getEntryById(entryId: string): Promise<JournalEntry | null> {
+    try {
+      const entries = this.getLocalEntries();
+      const entry = entries.find(entry => entry.id === entryId);
+      return entry || null;
+    } catch (error) {
+      console.error('Error getting journal entry by ID:', error);
+      throw error;
+    }
+  },
+
   // Helper to get entries from localStorage
   getLocalEntries(): JournalEntry[] {
     try {

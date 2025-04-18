@@ -1,5 +1,3 @@
-import { db } from "./firebase";
-import { collection, addDoc, getDocs, query, where, orderBy, deleteDoc, doc, updateDoc } from "firebase/firestore";
 import { imageService } from "./image-service";
 
 export interface JournalEntry {
@@ -21,14 +19,19 @@ export const journalService = {
         ...entry,
         createdAt: new Date(),
         updatedAt: new Date(),
+        id: Date.now().toString(), // Generate a unique ID
       };
 
-      const docRef = await addDoc(collection(db, 'journalEntries'), entryWithTimestamps);
+      // Get existing entries
+      const entries = this.getLocalEntries();
       
-      return {
-        ...entryWithTimestamps,
-        id: docRef.id,
-      };
+      // Add new entry
+      entries.push(entryWithTimestamps);
+      
+      // Save to localStorage
+      localStorage.setItem('journalEntries', JSON.stringify(entries));
+      
+      return entryWithTimestamps as JournalEntry;
     } catch (error) {
       console.error('Error creating journal entry:', error);
       throw error;
@@ -38,31 +41,48 @@ export const journalService = {
   // Get all entries for a user
   async getEntries(userId: string): Promise<JournalEntry[]> {
     try {
-      const q = query(
-        collection(db, 'journalEntries'),
-        where('userId', '==', userId),
-        orderBy('createdAt', 'desc')
-      );
-      
-      const querySnapshot = await getDocs(q);
-      return querySnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data(),
-      })) as JournalEntry[];
+      const entries = this.getLocalEntries();
+      // Filter entries by userId and sort by createdAt descending
+      return entries
+        .filter(entry => entry.userId === userId)
+        .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
     } catch (error) {
       console.error('Error getting journal entries:', error);
       throw error;
     }
   },
 
+  // Helper to get entries from localStorage
+  getLocalEntries(): JournalEntry[] {
+    try {
+      const entriesJson = localStorage.getItem('journalEntries');
+      if (!entriesJson) return [];
+      return JSON.parse(entriesJson) as JournalEntry[];
+    } catch (e) {
+      console.error('Error parsing journal entries from localStorage:', e);
+      return [];
+    }
+  },
+
   // Update an existing entry
   async updateEntry(entryId: string, updates: Partial<Omit<JournalEntry, 'id' | 'userId' | 'createdAt'>>): Promise<void> {
     try {
-      const entryRef = doc(db, 'journalEntries', entryId);
-      await updateDoc(entryRef, {
+      const entries = this.getLocalEntries();
+      const entryIndex = entries.findIndex(entry => entry.id === entryId);
+      
+      if (entryIndex === -1) {
+        throw new Error(`Entry with ID ${entryId} not found`);
+      }
+      
+      // Update the entry
+      entries[entryIndex] = {
+        ...entries[entryIndex],
         ...updates,
         updatedAt: new Date(),
-      });
+      };
+      
+      // Save to localStorage
+      localStorage.setItem('journalEntries', JSON.stringify(entries));
     } catch (error) {
       console.error('Error updating journal entry:', error);
       throw error;
@@ -72,8 +92,11 @@ export const journalService = {
   // Delete an entry
   async deleteEntry(entryId: string): Promise<void> {
     try {
-      const entryRef = doc(db, 'journalEntries', entryId);
-      await deleteDoc(entryRef);
+      const entries = this.getLocalEntries();
+      const filteredEntries = entries.filter(entry => entry.id !== entryId);
+      
+      // Save to localStorage
+      localStorage.setItem('journalEntries', JSON.stringify(filteredEntries));
     } catch (error) {
       console.error('Error deleting journal entry:', error);
       throw error;
@@ -91,38 +114,12 @@ export const journalService = {
     try {
       console.log(`Processing journal entry for user ${userId} with ${imageDataUrls.length} images`);
       
-      // Upload all images to Firebase Storage
-      let imageUrls: string[] = [];
-      
-      // Handle image uploads
-      if (imageDataUrls && imageDataUrls.length > 0) {
-        try {
-          // Upload images in sequence to avoid overwhelming the system
-          for (const imageDataUrl of imageDataUrls) {
-            try {
-              const imageUrl = await imageService.uploadImage(imageDataUrl, userId);
-              if (imageUrl) {
-                console.log(`Successfully uploaded image: ${imageUrl.substring(0, 50)}...`);
-                imageUrls.push(imageUrl);
-              }
-            } catch (imageError) {
-              console.error('Error uploading individual image:', imageError);
-              // Continue with the next image
-            }
-          }
-          console.log(`Successfully uploaded ${imageUrls.length} of ${imageDataUrls.length} images`);
-        } catch (error) {
-          console.error('Error uploading images:', error);
-          // Continue with empty image array if uploads fail
-        }
-      }
-
-      // Create the journal entry even if image uploads failed
+      // Store the image data URLs directly instead of uploading to Firebase
       return await this.createEntry({
         userId,
         title: title || 'Untitled Entry',
         text: text || '',
-        images: imageUrls,
+        images: imageDataUrls || [], // Store the data URLs directly
         qualifiers: qualifiers || [],
       });
     } catch (error) {

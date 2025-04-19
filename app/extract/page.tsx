@@ -31,6 +31,14 @@ export default function TextExtractionScreen() {
   const [highlightedText, setHighlightedText] = useState<React.ReactNode>(null)
   const [currentImage, setCurrentImage] = useState<string | null>(null)
   
+  // Compression stats
+  const [compressionStats, setCompressionStats] = useState<{
+    originalSize: number;
+    compressedSize: number;
+    compressionRatio: number;
+    level: string;
+  } | null>(null)
+  
   // Qualifiers state
   const [showQualifiers, setShowQualifiers] = useState(false)
   const [tone, setTone] = useState("")
@@ -66,6 +74,15 @@ export default function TextExtractionScreen() {
           if (result.errorRanges && result.errorRanges.length > 0) {
             setErrorRanges(result.errorRanges)
           }
+          
+          // Store compression stats if available
+          if (result.compressionStats) {
+            setCompressionStats({
+              ...result.compressionStats,
+              level: localStorage.getItem('compressionLevel') || 'Medium'
+            });
+          }
+          
           setStatusMessage("Text extracted successfully")
         } else {
           setOcrFailed(true)
@@ -152,6 +169,15 @@ export default function TextExtractionScreen() {
         if (result.errorRanges && result.errorRanges.length > 0) {
           setErrorRanges(result.errorRanges)
         }
+        
+        // Store compression stats if available
+        if (result.compressionStats) {
+          setCompressionStats({
+            ...result.compressionStats,
+            level: localStorage.getItem('compressionLevel') || 'Medium'
+          });
+        }
+        
         setStatusMessage("Text extracted successfully")
       } else {
         setOcrFailed(true)
@@ -392,6 +418,31 @@ export default function TextExtractionScreen() {
             </div>
             
             <Separator className="my-6" />
+            
+            {/* Compression Stats */}
+            {compressionStats && (
+              <div className="bg-white dark:bg-gray-800 p-4 rounded-md border border-gray-200 dark:border-gray-700 mb-6">
+                <h2 className="text-lg font-semibold mb-4">Compression Stats</h2>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="original-size">Original Size</Label>
+                    <div className="text-lg">{compressionStats.originalSize} KB</div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="compressed-size">Compressed Size</Label>
+                    <div className="text-lg">{compressionStats.compressedSize} KB</div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="compression-ratio">Compression Ratio</Label>
+                    <div className="text-lg">{Math.round(compressionStats.compressionRatio * 100)}%</div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="compression-level">Compression Level</Label>
+                    <div className="text-lg font-medium">{compressionStats.level}</div>
+                  </div>
+                </div>
+              </div>
+            )}
             
             {/* Qualifiers Section */}
             {showQualifiers && !isLoading && !ocrFailed && (

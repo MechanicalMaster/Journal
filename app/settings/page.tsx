@@ -39,7 +39,13 @@ export default function SettingsPage() {
   // Settings state
   const [darkMode, setDarkMode] = useState(false)
   const [notifications, setNotifications] = useState(true)
-  const [compression, setCompression] = useState("medium")
+  const [compression, setCompression] = useState(() => {
+    // Initialize from localStorage if available, otherwise default to "Medium"
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('compressionLevel') || "Medium"
+    }
+    return "Medium"
+  })
   const [requireAuth, setRequireAuth] = useState(false)
   const [showPinDialog, setShowPinDialog] = useState(false)
   const [pin, setPin] = useState("")
@@ -115,6 +121,11 @@ export default function SettingsPage() {
   // Handle compression change
   const handleCompressionChange = (value: string) => {
     setCompression(value)
+    
+    // Save to localStorage
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('compressionLevel', value)
+    }
 
     toast({
       title: "Compression setting saved",
@@ -164,13 +175,16 @@ export default function SettingsPage() {
                   <SelectValue placeholder="Select compression level" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="low">Low</SelectItem>
-                  <SelectItem value="medium">Medium</SelectItem>
-                  <SelectItem value="high">High</SelectItem>
+                  <SelectItem value="None">None</SelectItem>
+                  <SelectItem value="Low">Low</SelectItem>
+                  <SelectItem value="Medium">Medium</SelectItem>
+                  <SelectItem value="High">High</SelectItem>
                 </SelectContent>
               </Select>
 
-              <p className="text-sm text-muted-foreground">Low saves space, High improves OCR accuracy.</p>
+              <p className="text-sm text-muted-foreground">
+                None: No compression, Low: Minimal resize, Medium: Balanced, High: Aggressive compression
+              </p>
             </div>
           </div>
 

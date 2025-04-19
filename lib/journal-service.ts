@@ -1,37 +1,22 @@
+import { db, JournalEntry } from './db'; // Import Dexie db instance and interface
 import { imageService } from "./image-service";
-
-export interface JournalEntry {
-  id?: string;
-  userId: string;
-  title: string;
-  text: string;
-  images: string[];
-  qualifiers: string[];
-  createdAt: Date;
-  updatedAt: Date;
-}
 
 export const journalService = {
   // Create a new journal entry
   async createEntry(entry: Omit<JournalEntry, 'id' | 'createdAt' | 'updatedAt'>): Promise<JournalEntry> {
     try {
-      const entryWithTimestamps = {
+      const newEntry: JournalEntry = {
         ...entry,
+        id: Date.now().toString(), // Generate a unique ID (consistent with previous logic)
         createdAt: new Date(),
         updatedAt: new Date(),
-        id: Date.now().toString(), // Generate a unique ID
       };
 
-      // Get existing entries
-      const entries = this.getLocalEntries();
-      
-      // Add new entry
-      entries.push(entryWithTimestamps);
-      
-      // Save to localStorage
-      localStorage.setItem('journalEntries', JSON.stringify(entries));
-      
-      return entryWithTimestamps as JournalEntry;
+      // Use Dexie to add the entry
+      await db.journalEntries.add(newEntry);
+      console.log(`Entry created with ID: ${newEntry.id}`);
+      return newEntry;
+
     } catch (error) {
       console.error('Error creating journal entry:', error);
       throw error;
@@ -41,11 +26,12 @@ export const journalService = {
   // Get all entries for a user
   async getEntries(userId: string): Promise<JournalEntry[]> {
     try {
-      const entries = this.getLocalEntries();
-      // Filter entries by userId and sort by createdAt descending
-      return entries
-        .filter(entry => entry.userId === userId)
-        .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+      // Use Dexie to get entries, filter by userId, and sort
+      return await db.journalEntries
+        .where('userId')
+        .equals(userId)
+        .reverse() // To sort by createdAt descending
+        .sortBy('createdAt');
     } catch (error) {
       console.error('Error getting journal entries:', error);
       throw error;
@@ -53,48 +39,31 @@ export const journalService = {
   },
 
   // Get a single entry by ID
-  async getEntryById(entryId: string): Promise<JournalEntry | null> {
+  async getEntryById(entryId: string): Promise<JournalEntry | undefined> { // Return type updated
     try {
-      const entries = this.getLocalEntries();
-      const entry = entries.find(entry => entry.id === entryId);
-      return entry || null;
+      // Use Dexie to get an entry by its primary key (id)
+      const entry = await db.journalEntries.get(entryId);
+      return entry; // Returns undefined if not found, which is fine
     } catch (error) {
       console.error('Error getting journal entry by ID:', error);
       throw error;
     }
   },
 
-  // Helper to get entries from localStorage
-  getLocalEntries(): JournalEntry[] {
-    try {
-      const entriesJson = localStorage.getItem('journalEntries');
-      if (!entriesJson) return [];
-      return JSON.parse(entriesJson) as JournalEntry[];
-    } catch (e) {
-      console.error('Error parsing journal entries from localStorage:', e);
-      return [];
-    }
-  },
-
   // Update an existing entry
   async updateEntry(entryId: string, updates: Partial<Omit<JournalEntry, 'id' | 'userId' | 'createdAt'>>): Promise<void> {
     try {
-      const entries = this.getLocalEntries();
-      const entryIndex = entries.findIndex(entry => entry.id === entryId);
-      
-      if (entryIndex === -1) {
-        throw new Error(`Entry with ID ${entryId} not found`);
+      // Use Dexie to update the entry
+      const numUpdated = await db.journalEntries.update(entryId, { 
+        ...updates, 
+        updatedAt: new Date()
+      });
+
+      if (numUpdated === 0) {
+        throw new Error(`Entry with ID ${entryId} not found for update`);
       }
-      
-      // Update the entry
-      entries[entryIndex] = {
-        ...entries[entryIndex],
-        ...updates,
-        updatedAt: new Date(),
-      };
-      
-      // Save to localStorage
-      localStorage.setItem('journalEntries', JSON.stringify(entries));
+      console.log(`Entry updated: ${entryId}`);
+
     } catch (error) {
       console.error('Error updating journal entry:', error);
       throw error;
@@ -104,11 +73,9 @@ export const journalService = {
   // Delete an entry
   async deleteEntry(entryId: string): Promise<void> {
     try {
-      const entries = this.getLocalEntries();
-      const filteredEntries = entries.filter(entry => entry.id !== entryId);
-      
-      // Save to localStorage
-      localStorage.setItem('journalEntries', JSON.stringify(filteredEntries));
+      // Use Dexie to delete the entry
+      await db.journalEntries.delete(entryId);
+      console.log(`Entry deleted: ${entryId}`);
     } catch (error) {
       console.error('Error deleting journal entry:', error);
       throw error;
@@ -126,7 +93,7 @@ export const journalService = {
     try {
       console.log(`Processing journal entry for user ${userId} with ${imageDataUrls.length} images`);
       
-      // Store the image data URLs directly instead of uploading to Firebase
+      // This now uses the Dexie-backed createEntry
       return await this.createEntry({
         userId,
         title: title || 'Untitled Entry',

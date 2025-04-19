@@ -2,10 +2,12 @@
 
 import { useState, useRef, useEffect } from "react"
 import { useRouter } from "next/navigation"
-import { X, Upload, Camera } from "lucide-react"
+import { X, Upload, Camera, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import { useAuth } from "@/lib/auth-context"
+import { journalService } from "@/lib/journal-service"
+import { useToast } from "@/components/ui/use-toast"
 
 export default function UploadScreen() {
   const router = useRouter()
@@ -16,23 +18,8 @@ export default function UploadScreen() {
   const [capturedImages, setCapturedImages] = useState<string[]>([])
   const [showAddAnother, setShowAddAnother] = useState(false)
   const [currentImage, setCurrentImage] = useState<string | null>(null)
-
-  // Load existing images from localStorage if any
-  useEffect(() => {
-    const storedImages = localStorage.getItem('capturedImages')
-    if (storedImages) {
-      try {
-        const images = JSON.parse(storedImages)
-        if (Array.isArray(images) && images.length > 0) {
-          setCapturedImages(images)
-          setPageCount(images.length)
-          // Don't show Add Another automatically when loading from storage
-        }
-      } catch (error) {
-        console.error('Error loading images from localStorage:', error)
-      }
-    }
-  }, [])
+  const [isNavigating, setIsNavigating] = useState(false)
+  const { toast } = useToast()
 
   // Handle file selection
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -63,9 +50,6 @@ export default function UploadScreen() {
     const newCapturedImages = [...capturedImages, imageDataUrl]
     setCapturedImages(newCapturedImages)
     
-    // Store in localStorage for persistence
-    localStorage.setItem('capturedImages', JSON.stringify(newCapturedImages))
-    
     // Show "Add Another Page" option
     setShowAddAnother(true)
   }
@@ -88,10 +72,40 @@ export default function UploadScreen() {
   }
 
   // Continue to preview screen
-  const continueToPreview = () => {
-    // Save captured images to localStorage and navigate to preview
-    localStorage.setItem('capturedImages', JSON.stringify(capturedImages))
-    router.push("/preview")
+  const continueToPreview = async () => {
+    if (!user) {
+      toast({ title: "Error", description: "You must be logged in.", variant: "destructive" })
+      return
+    }
+    if (capturedImages.length === 0) {
+      toast({ title: "No Images", description: "Please add at least one image.", variant: "destructive" })
+      return
+    }
+
+    setIsNavigating(true)
+    try {
+      // Create a temporary entry with only userId and images
+      const tempEntry = await journalService.createEntry({
+        userId: user.uid,
+        title: 'Untitled Entry (Temporary)', // Placeholder title
+        text: '', // Empty text
+        images: capturedImages,
+        qualifiers: [], // Empty qualifiers
+      })
+
+      if (tempEntry && tempEntry.id) {
+        // Navigate to preview, passing the temporary entry ID
+        router.push(`/preview?entryId=${tempEntry.id}`)
+      } else {
+        throw new Error("Failed to create temporary entry or get its ID.")
+      }
+
+    } catch (error) {
+      console.error("Error creating temporary entry:", error)
+      toast({ title: "Error", description: "Could not proceed to preview. Please try again.", variant: "destructive" })
+      setIsNavigating(false)
+    }
+    // No need to set isNavigating to false on success, as we are navigating away
   }
 
   // Cancel and return to home
@@ -154,10 +168,11 @@ export default function UploadScreen() {
       <div className="absolute bottom-0 left-0 right-0 flex flex-col items-center p-6 z-20">
         {showAddAnother ? (
           <div className="flex space-x-4 mb-6">
-            <Button variant="outline" className="bg-white text-black hover:bg-gray-200" onClick={addAnotherPage}>
+            <Button variant="outline" className="bg-white text-black hover:bg-gray-200" onClick={addAnotherPage} disabled={isNavigating}>
               Add Another Page
             </Button>
-            <Button className="bg-emerald-600 hover:bg-emerald-700" onClick={continueToPreview}>
+            <Button className="bg-emerald-600 hover:bg-emerald-700" onClick={continueToPreview} disabled={isNavigating}>
+              {isNavigating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
               Continue
             </Button>
           </div>

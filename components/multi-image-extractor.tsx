@@ -21,13 +21,15 @@ import { Separator } from "@/components/ui/separator"
 import { cn } from "@/lib/utils"
 import { useToast } from "@/components/ui/use-toast"
 import { batchOcrService } from "@/lib/batch-ocr-service"
+import { journalService } from "@/lib/journal-service"
 
 interface MultiImageExtractorProps {
+  entryId: string;
   onComplete: (combinedText: string, results: any[]) => void;
   onStatusChange: (status: string, isLoading: boolean, failed: boolean) => void;
 }
 
-export function MultiImageExtractor({ onComplete, onStatusChange }: MultiImageExtractorProps) {
+export function MultiImageExtractor({ entryId, onComplete, onStatusChange }: MultiImageExtractorProps) {
   const { toast } = useToast()
   const textAreaRef = useRef<HTMLTextAreaElement>(null)
   
@@ -49,21 +51,36 @@ export function MultiImageExtractor({ onComplete, onStatusChange }: MultiImageEx
   // Load images and process with OCR
   useEffect(() => {
     const processAllImages = async () => {
-      // Get all captured images from localStorage
-      const storedImages = localStorage.getItem('capturedImages')
-      if (!storedImages) {
-        setOcrFailed(true)
-        onStatusChange("No images found to process", false, true)
-        setIsLoading(false)
-        return
+      if (!entryId) {
+        setOcrFailed(true);
+        onStatusChange("No Entry ID provided for processing", false, true);
+        setIsLoading(false);
+        return;
       }
 
-      const imageDataUrls = JSON.parse(storedImages)
-      setAllImages(imageDataUrls)
-      
+      setIsLoading(true);
+      onStatusChange("Loading images...", true, false);
+
+      let imageDataUrls: string[] = [];
+      try {
+        const entry = await journalService.getEntryById(entryId);
+        if (!entry || !entry.images || entry.images.length === 0) {
+          throw new Error("Entry not found or contains no images.");
+        }
+        imageDataUrls = entry.images;
+        setAllImages(imageDataUrls);
+      } catch (error) {
+         console.error('Error loading entry images:', error);
+         setOcrFailed(true);
+         onStatusChange(`Error loading images: ${(error as Error).message}`, false, true);
+         setIsLoading(false);
+         return;
+      }
+
+      // Check again after loading from DB
       if (imageDataUrls.length === 0) {
         setOcrFailed(true)
-        onStatusChange("No images found to process", false, true)
+        onStatusChange("No images found in the entry to process", false, true)
         setIsLoading(false)
         return
       }
@@ -112,7 +129,7 @@ export function MultiImageExtractor({ onComplete, onStatusChange }: MultiImageEx
     }
 
     processAllImages()
-  }, [onComplete, onStatusChange])
+  }, [entryId, onComplete, onStatusChange])
 
   // Functions to navigate between extracted texts
   const goToNextPage = () => {

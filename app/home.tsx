@@ -5,11 +5,22 @@ import { useRouter } from "next/navigation";
 import { Book, Settings, List, WifiOff, LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/lib/auth-context";
+import { motion } from "framer-motion";
+
+// Animation Variant
+const fadeInUp = {
+  initial: { opacity: 0, y: 10 },
+  animate: { opacity: 1, y: 0 },
+  transition: { duration: 0.5, ease: "easeOut" }
+};
 
 export default function HomePage() {
   const router = useRouter();
-  const { logout } = useAuth();
+  const { user, userProfile, logout, loading } = useAuth();
   const [isOnline, setIsOnline] = useState(true);
+
+  // Determine display name (prioritize Dexie profile)
+  const displayName = userProfile?.displayName || user?.displayName || "Journal User";
 
   // Check online status
   useEffect(() => {
@@ -41,6 +52,13 @@ export default function HomePage() {
     }
   };
 
+  // Don't render main content until auth check is complete
+  if (loading) {
+    // Optional: You could return a specific loading indicator for this page
+    // or rely on the layout's global loading state.
+    return null; // Or a loading spinner specific to this page
+  }
+
   return (
     <div className="flex flex-col min-h-screen bg-gray-50 dark:bg-gray-900">
       <header className="bg-white dark:bg-gray-950 border-b dark:border-gray-800 py-4">
@@ -55,6 +73,18 @@ export default function HomePage() {
           </Button>
         </div>
       </header>
+
+      {/* Welcome Message Section */}
+      <div className="container mx-auto px-4 pt-6 text-center">
+        <motion.h2 
+          variants={fadeInUp} 
+          initial="initial" 
+          animate="animate"
+          className="text-2xl font-semibold text-gray-800 dark:text-gray-200"
+        >
+          Welcome back, {displayName}!
+        </motion.h2>
+      </div>
 
       <main className="flex-1 flex flex-col items-center justify-center p-6 space-y-8">
         {!isOnline && (

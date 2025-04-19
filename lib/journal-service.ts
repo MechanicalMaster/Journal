@@ -58,7 +58,7 @@ export const journalService = {
         ...updates, 
         updatedAt: new Date()
       });
-
+      
       if (numUpdated === 0) {
         throw new Error(`Entry with ID ${entryId} not found for update`);
       }

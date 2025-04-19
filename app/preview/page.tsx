@@ -198,57 +198,57 @@ function PreviewContent() {
           </div>
         ) : (
           <>
-            <div className="relative w-full max-w-md aspect-[3/4] bg-white dark:bg-gray-800 rounded-lg shadow-lg overflow-hidden">
-              <img
+        <div className="relative w-full max-w-md aspect-[3/4] bg-white dark:bg-gray-800 rounded-lg shadow-lg overflow-hidden">
+          <img
                 src={currentImage || placeholderImage}
-                alt={`Preview of page ${currentPage}`}
-                className="w-full h-full object-contain"
-              />
+            alt={`Preview of page ${currentPage}`}
+            className="w-full h-full object-contain"
+          />
 
-              {processedImages.length > 1 && (
-                <div className="absolute bottom-2 right-2 px-3 py-1 bg-black/50 rounded-full text-white text-sm">
-                  {currentPage} / {processedImages.length}
-                </div>
-              )}
+          {processedImages.length > 1 && (
+            <div className="absolute bottom-2 right-2 px-3 py-1 bg-black/50 rounded-full text-white text-sm">
+              {currentPage} / {processedImages.length}
             </div>
+          )}
+        </div>
 
-            {processedImages.length > 1 && (
-              <div className="flex justify-center mt-4 space-x-4">
-                <Button 
-                  variant="outline" 
-                  size="icon"
-                  onClick={prevImage} 
-                  disabled={currentPage <= 1}
-                >
-                  <ChevronLeft className="h-5 w-5" />
-                  <span className="sr-only">Previous Image</span>
-                </Button>
-                <Button 
-                  variant="outline" 
-                  size="icon"
-                  onClick={nextImage} 
-                  disabled={currentPage >= processedImages.length}
-                >
-                  <ChevronRight className="h-5 w-5" />
-                  <span className="sr-only">Next Image</span>
-                </Button>
-              </div>
-            )}
+        {processedImages.length > 1 && (
+          <div className="flex justify-center mt-4 space-x-4">
+            <Button 
+              variant="outline" 
+              size="icon"
+              onClick={prevImage} 
+              disabled={currentPage <= 1}
+            >
+              <ChevronLeft className="h-5 w-5" />
+              <span className="sr-only">Previous Image</span>
+            </Button>
+            <Button 
+              variant="outline" 
+              size="icon"
+              onClick={nextImage} 
+              disabled={currentPage >= processedImages.length}
+            >
+              <ChevronRight className="h-5 w-5" />
+              <span className="sr-only">Next Image</span>
+            </Button>
+          </div>
+        )}
 
-            <div className="flex justify-center mt-6 space-x-4">
+        <div className="flex justify-center mt-6 space-x-4">
               <Button variant="outline" size="icon" onClick={handleDeleteImage} disabled={!currentImage || isLoading}>
-                <Trash2 className="h-5 w-5 text-red-500" />
-                <span className="sr-only">Delete</span>
-              </Button>
+            <Trash2 className="h-5 w-5 text-red-500" />
+            <span className="sr-only">Delete</span>
+          </Button>
               <Button variant="outline" size="icon" onClick={handleRotateImage} disabled={!currentImage || isLoading}>
-                <RotateCw className="h-5 w-5" />
-                <span className="sr-only">Rotate</span>
-              </Button>
+            <RotateCw className="h-5 w-5" />
+            <span className="sr-only">Rotate</span>
+          </Button>
               <Button variant="outline" size="icon" onClick={handleZoomImage} disabled={!currentImage || isLoading}>
-                <ZoomIn className="h-5 w-5" />
-                <span className="sr-only">Zoom</span>
-              </Button>
-            </div>
+            <ZoomIn className="h-5 w-5" />
+            <span className="sr-only">Zoom</span>
+          </Button>
+        </div>
           </>
         )}
       </main>

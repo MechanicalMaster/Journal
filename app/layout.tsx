@@ -25,9 +25,13 @@ export default function RootLayout({
     <html lang="en" suppressHydrationWarning>
       <body
         className={cn(
-          "min-h-screen bg-background font-sans antialiased",
+          "min-h-screen bg-gray-50 dark:bg-gray-900 font-sans antialiased",
           fontSans.variable
         )}
+        style={{
+          backgroundImage: `radial-gradient(rgba(0, 0, 0, 0.03) 1px, transparent 1px)`,
+          backgroundSize: `8px 8px`,
+        }}
       >
         <ThemeProvider
           attribute="class"

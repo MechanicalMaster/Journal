@@ -36,9 +36,8 @@ export default function TextExtractionScreen() {
 // Fallback component to show during loading
 function LoadingFallback() {
   return (
-    <div className="flex flex-col min-h-screen items-center justify-center bg-gray-50 dark:bg-gray-900">
-      <Loader2 className="h-12 w-12 animate-spin text-gray-500" />
-      <p className="mt-4 text-gray-500">Loading...</p>
+    <div className="flex justify-center items-center h-screen">
+      <Loader2 className="h-8 w-8 animate-spin" />
     </div>
   );
 }
@@ -50,6 +49,7 @@ function TextExtractionContent() {
   const { toast } = useToast()
   const { user } = useAuth()
   const [extractedText, setExtractedText] = useState("")
+  const [title, setTitle] = useState("")
   const [isLoading, setIsLoading] = useState(true)
   const [ocrFailed, setOcrFailed] = useState(false)
   const [statusMessage, setStatusMessage] = useState("Extracting text...")
@@ -59,12 +59,12 @@ function TextExtractionContent() {
   const [extractionResults, setExtractionResults] = useState<any[]>([])
   
   // Compression stats
-  const [compressionStats, setCompressionStats] = useState<{
-    originalSize: number;
-    compressedSize: number;
-    compressionRatio: number;
-    level: string;
-  } | null>(null)
+  // const [compressionStats, setCompressionStats] = useState<{
+  //   originalSize: number;
+  //   compressedSize: number;
+  //   compressionRatio: number;
+  //   level: string;
+  // } | null>(null)
   
   // Qualifiers state
   const [showQualifiers, setShowQualifiers] = useState(false)
@@ -95,14 +95,11 @@ function TextExtractionContent() {
     setExtractedText(combinedText)
     setExtractionResults(results)
     
-    // Set compression stats if available from the first result
-    if (results.length > 0 && results[0].compressionStats) {
-      setCompressionStats({
-        ...results[0].compressionStats,
-        level: 'Medium'
-      })
-    }
-  }, []) // Empty dependency array as it doesn't depend on component state
+    // Optionally pre-fill title based on first few words
+    const initialTitle = combinedText.trim().split(/\s+/).slice(0, 5).join(' ')
+    const initialTitleWithEllipsis = combinedText.trim().split(/\s+/).length > 5 ? initialTitle + '...' : initialTitle
+    setTitle(initialTitleWithEllipsis || 'Untitled Entry')
+  }, []) // Empty dependency array
   
   const handleStatusChange = useCallback((status: string, loading: boolean, failed: boolean) => {
     setStatusMessage(status)
@@ -119,7 +116,7 @@ function TextExtractionContent() {
       })
       return
     }
-    
+
     if (!tempEntryId) {
       toast({ title: "Error", description: "Entry ID is missing.", variant: "destructive" })
       return
@@ -127,9 +124,8 @@ function TextExtractionContent() {
 
     setIsSaving(true)
     try {
-      // Create a title from the first few words of the text
-      const title = extractedText.trim().split(/\s+/).slice(0, 5).join(' ') || 'Untitled Entry'
-      const titleWithEllipsis = extractedText.trim().split(/\s+/).length > 5 ? title + '...' : title
+      // Use the title from state, provide default if empty
+      const finalTitle = title.trim() || 'Untitled Entry'
 
       // Create qualifiers array
       const qualifiers = []
@@ -140,7 +136,7 @@ function TextExtractionContent() {
 
       // Save the entry using the journal service
       await journalService.updateEntry(tempEntryId!, {
-        title: titleWithEllipsis,
+        title: finalTitle,
         text: extractedText,
         qualifiers: qualifiers
       })
@@ -236,15 +232,15 @@ function TextExtractionContent() {
           <div className="flex-1 flex flex-col">
             {/* Image extractor component */}
             {tempEntryId && (
-              <MultiImageExtractor 
+            <MultiImageExtractor 
                 entryId={tempEntryId}
-                onComplete={handleExtractionComplete} 
-                onStatusChange={handleStatusChange} 
-              />
+              onComplete={handleExtractionComplete} 
+              onStatusChange={handleStatusChange} 
+            />
             )}
             
             {/* Compression Stats */}
-            {compressionStats && (
+            {/* {compressionStats && (
               <div className="bg-white dark:bg-gray-800 p-4 rounded-md border border-gray-200 dark:border-gray-700 mb-6">
                 <h2 className="text-lg font-semibold mb-4">Compression Stats</h2>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -265,6 +261,20 @@ function TextExtractionContent() {
                     <div className="text-lg font-medium">{compressionStats.level}</div>
                   </div>
                 </div>
+              </div>
+            )} */}
+            
+            {/* Title Input Section */}
+            {!isLoading && !ocrFailed && (
+              <div className="mb-6">
+                <Label htmlFor="entry-title" className="text-lg font-semibold mb-2 block">Title</Label>
+                <Input 
+                  id="entry-title"
+                  placeholder="Enter a title for your entry"
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  className="text-base"
+                />
               </div>
             )}
             
@@ -304,6 +314,9 @@ function TextExtractionContent() {
                         <SelectItem value="Finance">Finance</SelectItem>
                         <SelectItem value="Education">Education</SelectItem>
                         <SelectItem value="Creativity">Creativity</SelectItem>
+                        <SelectItem value="Product Philosophy">Product Philosophy</SelectItem>
+                        <SelectItem value="Philosophy">Philosophy</SelectItem>
+                        <SelectItem value="Marriage">Marriage</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>

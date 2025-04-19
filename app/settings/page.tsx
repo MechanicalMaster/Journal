@@ -2,7 +2,7 @@
 
 import { useState, useRef } from "react"
 import { useRouter } from "next/navigation"
-import { ArrowLeft, Moon, Sun, Bell, Lock, Trash2, Info, Mail, FileText, Fingerprint, Upload, Download, Loader2 } from "lucide-react"
+import { ArrowLeft, Moon, Sun, Bell, Lock, Trash2, Info, Mail, FileText, Fingerprint, Upload, Download, Loader2, User as UserIcon } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Switch } from "@/components/ui/switch"
 import { Label } from "@/components/ui/label"
@@ -412,11 +412,25 @@ export default function SettingsPage() {
                     {/* Make sure the action calls the correct handler */}
                     <AlertDialogAction onClick={handleClearData} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
                       Clear Data
-                    </AlertDialogAction>
+                          </AlertDialogAction>
                   </AlertDialogFooter>
                 </AlertDialogContent>
               </AlertDialog>
             </div>
+          </div>
+
+          {/* Profile Link/Button */}
+          <div>
+            <h2 className="text-lg font-medium">Profile</h2>
+            <Separator className="my-2" />
+            <Button 
+              variant="outline"
+              className="w-full justify-start"
+              onClick={() => router.push('/profile')}
+            >
+              <UserIcon className="h-4 w-4 mr-2" />
+              Edit Profile (Name & Picture)
+            </Button>
           </div>
 
           {/* About Section */}

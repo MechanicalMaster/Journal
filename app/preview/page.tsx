@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, Suspense } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { ArrowLeft, Check, Trash2, RotateCw, ZoomIn, Loader2, ChevronLeft, ChevronRight } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -9,7 +9,18 @@ import { useAuth } from "@/lib/auth-context"
 import { journalService } from "@/lib/journal-service"
 import { JournalEntry } from "@/lib/db"
 
-export default function PreviewScreen() {
+// Fallback component for Suspense
+function LoadingFallback() {
+  return (
+    <div className="flex flex-col min-h-screen items-center justify-center bg-gray-100 dark:bg-gray-900">
+      <Loader2 className="h-16 w-16 animate-spin text-gray-500" />
+      <p className="mt-4 text-gray-500">Loading Preview...</p>
+    </div>
+  );
+}
+
+// Original component renamed
+function PreviewContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const { toast } = useToast()
@@ -242,5 +253,14 @@ export default function PreviewScreen() {
         )}
       </main>
     </div>
+  )
+}
+
+// Default export wraps the content in Suspense
+export default function PreviewScreen() {
+  return (
+    <Suspense fallback={<LoadingFallback />}>
+      <PreviewContent />
+    </Suspense>
   )
 }

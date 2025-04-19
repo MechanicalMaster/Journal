@@ -51,7 +51,7 @@ export default function EditEntryScreen({ params }: { params: { id: string } | P
   // State for entry and loading
   const [isPageLoading, setIsPageLoading] = useState(true)
   const [originalEntry, setOriginalEntry] = useState<JournalEntry | null>(null)
-  
+
   // State for form values
   const [entryText, setEntryText] = useState("")
   const [tone, setTone] = useState(NONE_VALUE)
@@ -192,7 +192,7 @@ export default function EditEntryScreen({ params }: { params: { id: string } | P
       if (topic !== NONE_VALUE) updatedQualifiers.push(`Topic: ${topic}`)
       if (mood !== NONE_VALUE) updatedQualifiers.push(`Mood: ${mood}`)
       if (context) updatedQualifiers.push(`Context: ${context}`)
-      
+
       // Create a title from the first few words of the text
       const title = entryText.split(' ').slice(0, 5).join(' ') + '...'
       
@@ -207,7 +207,7 @@ export default function EditEntryScreen({ params }: { params: { id: string } | P
         title: "Changes saved",
         description: "Your entry has been updated successfully.",
       })
-      
+
       router.push(`/entries/${entryId}`)
     } catch (error) {
       console.error('Error updating entry:', error)
@@ -240,7 +240,7 @@ export default function EditEntryScreen({ params }: { params: { id: string } | P
 
   const handleForceSave = async () => {
     setShowQualifierReminder(false)
-    
+
     if (!originalEntry) return
     
     setIsSaving(true)
@@ -252,7 +252,7 @@ export default function EditEntryScreen({ params }: { params: { id: string } | P
       if (topic !== NONE_VALUE) updatedQualifiers.push(`Topic: ${topic}`)
       if (mood !== NONE_VALUE) updatedQualifiers.push(`Mood: ${mood}`)
       if (context) updatedQualifiers.push(`Context: ${context}`)
-      
+
       // Create a title from the first few words of the text
       const title = entryText.split(' ').slice(0, 5).join(' ') + '...'
       
@@ -267,7 +267,7 @@ export default function EditEntryScreen({ params }: { params: { id: string } | P
         title: "Changes saved",
         description: "Your entry has been updated successfully.",
       })
-      
+
       router.push(`/entries/${entryId}`)
     } catch (error) {
       console.error('Error updating entry:', error)
@@ -326,7 +326,7 @@ export default function EditEntryScreen({ params }: { params: { id: string } | P
               {isSaving ? (
                 <Loader2 className="h-4 w-4 mr-2 animate-spin" />
               ) : (
-                <Save className="h-4 w-4 mr-2" />
+              <Save className="h-4 w-4 mr-2" />
               )}
               Save Changes
             </Button>

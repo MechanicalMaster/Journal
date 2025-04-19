@@ -208,7 +208,7 @@ export default function EntryDetailsScreen({ params }: { params: { id: string } 
               {isDeleting ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
               ) : (
-                <Trash2 className="h-4 w-4" />
+              <Trash2 className="h-4 w-4" />
               )}
               <span className="sr-only">Delete</span>
             </Button>
@@ -232,27 +232,27 @@ export default function EntryDetailsScreen({ params }: { params: { id: string } 
 
           {entry.images && entry.images.length > 0 && (
             <>
-              <Separator />
-              <div className="space-y-4">
-                <h3 className="text-lg font-medium">Journal Images</h3>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  {entry.images.map((image, i) => (
-                    <div
-                      key={i}
-                      className="relative aspect-[3/4] bg-white dark:bg-gray-800 rounded-lg overflow-hidden shadow-sm"
-                    >
-                      <img
-                        src={image || "/placeholder.svg"}
-                        alt={`Journal page ${i + 1}`}
-                        className="w-full h-full object-contain"
-                      />
-                      <div className="absolute bottom-2 right-2 px-2 py-1 bg-black/50 rounded-full text-white text-xs">
-                        Page {i + 1}
-                      </div>
-                    </div>
-                  ))}
+          <Separator />
+          <div className="space-y-4">
+            <h3 className="text-lg font-medium">Journal Images</h3>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {entry.images.map((image, i) => (
+                <div
+                  key={i}
+                  className="relative aspect-[3/4] bg-white dark:bg-gray-800 rounded-lg overflow-hidden shadow-sm"
+                >
+                  <img
+                    src={image || "/placeholder.svg"}
+                    alt={`Journal page ${i + 1}`}
+                    className="w-full h-full object-contain"
+                  />
+                  <div className="absolute bottom-2 right-2 px-2 py-1 bg-black/50 rounded-full text-white text-xs">
+                    Page {i + 1}
+                  </div>
                 </div>
-              </div>
+              ))}
+            </div>
+          </div>
             </>
           )}
 

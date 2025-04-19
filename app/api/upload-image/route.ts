@@ -27,8 +27,8 @@ export async function POST(request: NextRequest) {
     
     // Since storage is now on client-side, just return the same URL back
     // Client will store it in localStorage
-    return NextResponse.json({
-      success: true,
+      return NextResponse.json({
+        success: true,
       url: imageData // Return the same data URL that was sent
     });
     

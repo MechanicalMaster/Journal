@@ -2,9 +2,16 @@
 
 import type React from "react"
 
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect, useRef, useCallback } from "react"
 import { useRouter } from "next/navigation"
-import { ArrowLeft, Save, RefreshCw, Edit, Loader2, ChevronDown, ZoomIn, ZoomOut } from "lucide-react"
+import { 
+  ArrowLeft, 
+  Save, 
+  RefreshCw, 
+  Edit, 
+  Loader2, 
+  ChevronDown
+} from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { Input } from "@/components/ui/input"
@@ -16,7 +23,7 @@ import { journalService } from "@/lib/journal-service"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Label } from "@/components/ui/label"
 import { Separator } from "@/components/ui/separator"
-import { Card } from "@/components/ui/card"
+import { MultiImageExtractor } from "@/components/multi-image-extractor"
 
 export default function TextExtractionScreen() {
   const router = useRouter()
@@ -25,11 +32,11 @@ export default function TextExtractionScreen() {
   const [extractedText, setExtractedText] = useState("")
   const [isLoading, setIsLoading] = useState(true)
   const [ocrFailed, setOcrFailed] = useState(false)
-  const [errorRanges, setErrorRanges] = useState<{ start: number; end: number }[]>([])
   const [statusMessage, setStatusMessage] = useState("Extracting text...")
   const textAreaRef = useRef<HTMLTextAreaElement>(null)
-  const [highlightedText, setHighlightedText] = useState<React.ReactNode>(null)
-  const [currentImage, setCurrentImage] = useState<string | null>(null)
+  
+  // Multi-image support
+  const [extractionResults, setExtractionResults] = useState<any[]>([])
   
   // Compression stats
   const [compressionStats, setCompressionStats] = useState<{
@@ -45,166 +52,30 @@ export default function TextExtractionScreen() {
   const [topic, setTopic] = useState("")
   const [mood, setMood] = useState("")
   const [context, setContext] = useState("")
-  
-  // Image zoom state
-  const [zoomLevel, setZoomLevel] = useState(1)
-
-  // Process the image using OpenAI API
-  useEffect(() => {
-    const extractTextFromImage = async () => {
-      // Get the current image from localStorage
-      const storedImage = localStorage.getItem('currentImage')
-      if (!storedImage) {
-        setOcrFailed(true)
-        setStatusMessage("No image found to process")
-        setIsLoading(false)
-        return
-      }
-
-      setCurrentImage(storedImage)
-      setIsLoading(true)
-      setStatusMessage("Extracting text...")
-
-      try {
-        // Call the API to process the image
-        const result = await imageService.processImage(storedImage)
-
-        if (result.success && result.text) {
-          setExtractedText(result.text)
-          if (result.errorRanges && result.errorRanges.length > 0) {
-            setErrorRanges(result.errorRanges)
-          }
-          
-          // Store compression stats if available
-          if (result.compressionStats) {
-            setCompressionStats({
-              ...result.compressionStats,
-              level: localStorage.getItem('compressionLevel') || 'Medium'
-            });
-          }
-          
-          setStatusMessage("Text extracted successfully")
-        } else {
-          setOcrFailed(true)
-          setStatusMessage(`OCR failed: ${result.error || 'Text unclear'}`)
-        }
-      } catch (error) {
-        console.error('Error extracting text:', error)
-        setOcrFailed(true)
-        setStatusMessage(`OCR failed: ${(error as Error).message || "Processing error"}`)
-      } finally {
-        setIsLoading(false)
-      }
-    }
-
-    extractTextFromImage()
-  }, [])
-
-  // Process text with highlighted errors
-  useEffect(() => {
-    if (!extractedText || errorRanges.length === 0) {
-      setHighlightedText(extractedText)
-      return
-    }
-
-    // Create highlighted text by splitting at error ranges and wrapping in spans
-    let lastIndex = 0
-    const textParts: React.ReactNode[] = []
-
-    errorRanges.forEach((range, i) => {
-      // Add text before error
-      if (range.start > lastIndex) {
-        textParts.push(extractedText.substring(lastIndex, range.start))
-      }
-
-      // Add highlighted error text
-      textParts.push(
-        <span key={i} className="bg-yellow-200 dark:bg-yellow-900/50">
-          {extractedText.substring(range.start, range.end)}
-        </span>,
-      )
-
-      lastIndex = range.end
-    })
-
-    // Add remaining text
-    if (lastIndex < extractedText.length) {
-      textParts.push(extractedText.substring(lastIndex))
-    }
-
-    setHighlightedText(textParts)
-  }, [extractedText, errorRanges])
-
-  const handleTextChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    setExtractedText(e.target.value)
-    // Clear error highlights when user edits text
-    setErrorRanges([])
-  }
-
-  const handleRetryOcr = async () => {
-    // Reset and retry OCR
-    setOcrFailed(false)
-    setExtractedText("")
-    setErrorRanges([])
-
-    if (!currentImage) {
-      toast({
-        title: "No image to process",
-        description: "Please go back and capture an image first.",
-        variant: "destructive",
-      })
-      return
-    }
-
-    // Process the image again
-    setIsLoading(true)
-    setStatusMessage("Extracting text...")
-
-    try {
-      // Call the API to process the image
-      const result = await imageService.processImage(currentImage)
-
-      if (result.success && result.text) {
-        setExtractedText(result.text)
-        if (result.errorRanges && result.errorRanges.length > 0) {
-          setErrorRanges(result.errorRanges)
-        }
-        
-        // Store compression stats if available
-        if (result.compressionStats) {
-          setCompressionStats({
-            ...result.compressionStats,
-            level: localStorage.getItem('compressionLevel') || 'Medium'
-          });
-        }
-        
-        setStatusMessage("Text extracted successfully")
-      } else {
-        setOcrFailed(true)
-        setStatusMessage(`OCR failed: ${result.error || 'Text unclear'}`)
-      }
-    } catch (error) {
-      console.error('Error extracting text:', error)
-      setOcrFailed(true)
-      setStatusMessage(`OCR failed: ${(error as Error).message || "Processing error"}`)
-    } finally {
-      setIsLoading(false)
-    }
-  }
-
-  const handleEditOcr = () => {
-    setOcrFailed(false)
-    setStatusMessage("Edit mode - Make corrections as needed")
-
-    // Focus on the text area
-    if (textAreaRef.current) {
-      textAreaRef.current.focus()
-    }
-  }
 
   const handleShowQualifiers = () => {
     setShowQualifiers(true)
   }
+  
+  // Memoize callback functions to prevent unnecessary re-renders
+  const handleExtractionComplete = useCallback((combinedText: string, results: any[]) => {
+    setExtractedText(combinedText)
+    setExtractionResults(results)
+    
+    // Set compression stats if available from the first result
+    if (results.length > 0 && results[0].compressionStats) {
+      setCompressionStats({
+        ...results[0].compressionStats,
+        level: localStorage.getItem('compressionLevel') || 'Medium'
+      });
+    }
+  }, []) // Empty dependency array as it doesn't depend on component state
+  
+  const handleStatusChange = useCallback((status: string, loading: boolean, failed: boolean) => {
+    setStatusMessage(status)
+    setIsLoading(loading)
+    setOcrFailed(failed)
+  }, []) // Empty dependency array
 
   const handleSaveText = async () => {
     if (!user) {
@@ -237,7 +108,7 @@ export default function TextExtractionScreen() {
         title,
         extractedText,
         imageDataUrls,
-        qualifiers // Now passing the qualifiers
+        qualifiers
       )
 
       // Clear localStorage
@@ -269,7 +140,6 @@ export default function TextExtractionScreen() {
   // Add a new function for fresh manual entry
   const handleManualEntry = () => {
     setExtractedText("")
-    setErrorRanges([])
     setOcrFailed(false)
     setStatusMessage("Manual entry mode")
 
@@ -277,15 +147,6 @@ export default function TextExtractionScreen() {
     if (textAreaRef.current) {
       textAreaRef.current.focus()
     }
-  }
-  
-  // Zoom controls for image
-  const zoomIn = () => {
-    setZoomLevel(prev => Math.min(prev + 0.25, 3)) // Max zoom 3x
-  }
-  
-  const zoomOut = () => {
-    setZoomLevel(prev => Math.max(prev - 0.25, 0.5)) // Min zoom 0.5x
   }
 
   return (
@@ -321,103 +182,28 @@ export default function TextExtractionScreen() {
             <div className="text-center space-y-2">
               <h2 className="text-xl font-semibold">OCR Failed</h2>
               <p className="text-gray-500 dark:text-gray-400">
-                We couldn't clearly extract text from your image. You can retry or enter text manually.
+                We couldn't clearly extract text from your images. You can retry or enter text manually.
               </p>
             </div>
 
             <div className="flex flex-col sm:flex-row gap-3">
-              <Button variant="outline" onClick={handleRetryOcr}>
+              <Button variant="outline" onClick={() => window.location.reload()}>
                 <RefreshCw className="h-4 w-4 mr-2" />
                 Retry OCR
               </Button>
-              <Button onClick={handleEditOcr}>
+              <Button onClick={handleManualEntry}>
                 <Edit className="h-4 w-4 mr-2" />
-                Edit OCR
-              </Button>
-              <Button variant="outline" onClick={handleManualEntry}>
-                <Edit className="h-4 w-4 mr-2" />
-                Clear & Manual Entry
+                Manual Entry
               </Button>
             </div>
           </div>
         ) : (
           <div className="flex-1 flex flex-col">
-            {/* Side-by-side comparison layout */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 h-full">
-              {/* Original Image Column */}
-              <div className="flex flex-col">
-                <div className="flex items-center justify-between mb-2">
-                  <h2 className="text-sm font-medium">Original Image</h2>
-                  <div className="flex items-center space-x-2">
-                    <Button variant="outline" size="sm" onClick={zoomOut} disabled={zoomLevel <= 0.5}>
-                      <ZoomOut className="h-4 w-4" />
-                    </Button>
-                    <span className="text-xs font-medium">{Math.round(zoomLevel * 100)}%</span>
-                    <Button variant="outline" size="sm" onClick={zoomIn} disabled={zoomLevel >= 3}>
-                      <ZoomIn className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </div>
-                
-                <Card className="flex-1 overflow-auto relative bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md">
-                  {isLoading ? (
-                    <div className="absolute inset-0 flex items-center justify-center">
-                      <Loader2 className="h-8 w-8 animate-spin text-gray-400" />
-                    </div>
-                  ) : currentImage ? (
-                    <div className="h-full overflow-auto p-4 flex items-center justify-center">
-                      <div 
-                        className="relative" 
-                        style={{ 
-                          transform: `scale(${zoomLevel})`, 
-                          transformOrigin: 'center center',
-                          transition: 'transform 0.2s ease-out'
-                        }}
-                      >
-                        <img 
-                          src={currentImage} 
-                          alt="Original journal page" 
-                          className="max-w-full object-contain"
-                        />
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="h-full flex items-center justify-center p-4 text-gray-400">
-                      No image available
-                    </div>
-                  )}
-                </Card>
-              </div>
-              
-              {/* Extracted Text Column */}
-              <div className="flex flex-col">
-                <div className="mb-2">
-                  <label htmlFor="extracted-text" className="text-sm font-medium">
-                    Extracted Text{" "}
-                    {errorRanges.length > 0 && (
-                      <span className="text-yellow-600 dark:text-yellow-400">(potential errors highlighted)</span>
-                    )}
-                  </label>
-                </div>
-
-                {isLoading ? (
-                  <div className="flex-1 flex items-center justify-center bg-white dark:bg-gray-800 rounded-md border p-4">
-                    <Loader2 className="h-8 w-8 animate-spin text-gray-400" />
-                  </div>
-                ) : (
-                  <Textarea
-                    ref={textAreaRef}
-                    id="extracted-text"
-                    value={extractedText}
-                    onChange={handleTextChange}
-                    placeholder="Extracted text will appear here..."
-                    className="flex-1 min-h-[300px] text-base resize-none font-mono"
-                  />
-                )}
-              </div>
-            </div>
-            
-            <Separator className="my-6" />
+            {/* Image extractor component */}
+            <MultiImageExtractor 
+              onComplete={handleExtractionComplete} 
+              onStatusChange={handleStatusChange} 
+            />
             
             {/* Compression Stats */}
             {compressionStats && (
@@ -515,20 +301,12 @@ export default function TextExtractionScreen() {
             )}
             
             {/* Action Buttons */}
-            <div className="flex flex-col sm:flex-row gap-3 justify-end">
+            <div className="flex flex-col sm:flex-row gap-3 justify-end mt-4">
               {!ocrFailed && !isLoading && (
                 <>
-                  <Button variant="outline" onClick={handleEditOcr}>
-                    <Edit className="h-4 w-4 mr-2" />
-                    Edit OCR
-                  </Button>
                   <Button variant="outline" onClick={handleManualEntry}>
                     <Edit className="h-4 w-4 mr-2" />
-                    Clear & Manual Entry
-                  </Button>
-                  <Button variant="outline" onClick={handleRetryOcr}>
-                    <RefreshCw className="h-4 w-4 mr-2" />
-                    Retry OCR
+                    Manual Entry
                   </Button>
                   {!showQualifiers ? (
                     <Button onClick={handleShowQualifiers} disabled={!extractedText.trim()}>
@@ -538,7 +316,7 @@ export default function TextExtractionScreen() {
                   ) : (
                     <Button onClick={handleSaveText} disabled={!extractedText.trim()}>
                       <Save className="h-4 w-4 mr-2" />
-                      Save Text
+                      Save Entry
                     </Button>
                   )}
                 </>

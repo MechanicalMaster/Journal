@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
-import { ArrowLeft, Check, Trash2, RotateCw, ZoomIn, Loader2 } from "lucide-react"
+import { ArrowLeft, Check, Trash2, RotateCw, ZoomIn, Loader2, ChevronLeft, ChevronRight } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useToast } from "@/components/ui/use-toast"
 import { useAuth } from "@/lib/auth-context"
@@ -36,10 +36,10 @@ export default function PreviewScreen() {
   }
 
   const proceedToExtract = async () => {
-    if (!image) {
+    if (processedImages.length === 0) {
       toast({
-        title: "No image to process",
-        description: "Please go back and capture an image first.",
+        title: "No images to process",
+        description: "Please go back and capture at least one image first.",
         variant: "destructive",
       })
       return
@@ -48,16 +48,19 @@ export default function PreviewScreen() {
     setIsProcessing(true)
 
     try {
-      // Store the current image in localStorage for the extract page to use
-      localStorage.setItem('currentImage', image)
+      // Store all images in localStorage for the extract page to use
+      localStorage.setItem('capturedImages', JSON.stringify(processedImages))
+      
+      // Store the current image for backward compatibility
+      localStorage.setItem('currentImage', processedImages[0])
       
       // Navigate to extract page
       router.push("/extract")
     } catch (error) {
-      console.error('Error processing image:', error)
+      console.error('Error preparing images for processing:', error)
       toast({
         title: "Processing Failed",
-        description: "There was an error processing your image. Please try again.",
+        description: "There was an error preparing your images. Please try again.",
         variant: "destructive",
       })
       setIsProcessing(false)
@@ -99,6 +102,23 @@ export default function PreviewScreen() {
       description: "Image zoom functionality would be implemented here.",
     })
   }
+  
+  // Image navigation functions
+  const nextImage = () => {
+    if (currentPage < processedImages.length) {
+      const nextPage = currentPage + 1
+      setCurrentPage(nextPage)
+      setImage(processedImages[nextPage - 1])
+    }
+  }
+
+  const prevImage = () => {
+    if (currentPage > 1) {
+      const prevPage = currentPage - 1
+      setCurrentPage(prevPage)
+      setImage(processedImages[prevPage - 1])
+    }
+  }
 
   return (
     <div className="flex flex-col min-h-screen bg-gray-100 dark:bg-gray-900">
@@ -113,7 +133,7 @@ export default function PreviewScreen() {
           </div>
           <Button 
             onClick={proceedToExtract} 
-            disabled={isProcessing || !image}
+            disabled={isProcessing || processedImages.length === 0}
           >
             {isProcessing ? (
               <>
@@ -123,7 +143,7 @@ export default function PreviewScreen() {
             ) : (
               <>
                 <Check className="mr-2 h-5 w-5" />
-                Extract Text
+                {processedImages.length > 1 ? 'Extract Text (All Pages)' : 'Extract Text'}
               </>
             )}
           </Button>
@@ -144,6 +164,30 @@ export default function PreviewScreen() {
             </div>
           )}
         </div>
+
+        {/* Image navigation controls */}
+        {processedImages.length > 1 && (
+          <div className="flex justify-center mt-4 space-x-4">
+            <Button 
+              variant="outline" 
+              size="icon"
+              onClick={prevImage} 
+              disabled={currentPage <= 1}
+            >
+              <ChevronLeft className="h-5 w-5" />
+              <span className="sr-only">Previous Image</span>
+            </Button>
+            <Button 
+              variant="outline" 
+              size="icon"
+              onClick={nextImage} 
+              disabled={currentPage >= processedImages.length}
+            >
+              <ChevronRight className="h-5 w-5" />
+              <span className="sr-only">Next Image</span>
+            </Button>
+          </div>
+        )}
 
         <div className="flex justify-center mt-6 space-x-4">
           <Button variant="outline" size="icon" onClick={handleDeleteImage} disabled={!image}>

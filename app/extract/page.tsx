@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState, useEffect, useRef, useCallback } from "react"
+import { useState, useEffect, useRef, useCallback, Suspense } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { 
   ArrowLeft, 
@@ -26,6 +26,25 @@ import { Separator } from "@/components/ui/separator"
 import { MultiImageExtractor } from "@/components/multi-image-extractor"
 
 export default function TextExtractionScreen() {
+  return (
+    <Suspense fallback={<LoadingFallback />}>
+      <TextExtractionContent />
+    </Suspense>
+  )
+}
+
+// Fallback component to show during loading
+function LoadingFallback() {
+  return (
+    <div className="flex flex-col min-h-screen items-center justify-center bg-gray-50 dark:bg-gray-900">
+      <Loader2 className="h-12 w-12 animate-spin text-gray-500" />
+      <p className="mt-4 text-gray-500">Loading...</p>
+    </div>
+  );
+}
+
+// Renamed the original component function to avoid conflict
+function TextExtractionContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const { toast } = useToast()

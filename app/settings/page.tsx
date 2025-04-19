@@ -1,8 +1,8 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useRef } from "react"
 import { useRouter } from "next/navigation"
-import { ArrowLeft, Moon, Sun, Bell, Lock, Trash2, Info, Mail, FileText, Fingerprint } from "lucide-react"
+import { ArrowLeft, Moon, Sun, Bell, Lock, Trash2, Info, Mail, FileText, Fingerprint, Upload, Download, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Switch } from "@/components/ui/switch"
 import { Label } from "@/components/ui/label"
@@ -31,10 +31,14 @@ import { Input } from "@/components/ui/input"
 import { useToast } from "@/components/ui/use-toast"
 import { Card, CardContent } from "@/components/ui/card"
 import { ImageIcon } from "lucide-react"
+import { journalService } from "@/lib/journal-service"
+import { useAuth } from "@/lib/auth-context"
 
 export default function SettingsPage() {
   const router = useRouter()
   const { toast } = useToast()
+  const { user } = useAuth()
+  const importFileInputRef = useRef<HTMLInputElement>(null)
 
   // Settings state
   const [darkMode, setDarkMode] = useState(false)
@@ -53,6 +57,8 @@ export default function SettingsPage() {
   const [pinError, setPinError] = useState("")
   const [biometricsAvailable, setBiometricsAvailable] = useState(true)
   const [useBiometrics, setUseBiometrics] = useState(false)
+  const [isExporting, setIsExporting] = useState(false)
+  const [isImporting, setIsImporting] = useState(false)
 
   // App info
   const appVersion = "1.0.0"
@@ -107,6 +113,124 @@ export default function SettingsPage() {
       })
     }
   }
+
+  // Handle Export
+  const handleExport = async () => {
+    if (!user) {
+      toast({ title: "Error", description: "You must be logged in to export data.", variant: "destructive" });
+      return;
+    }
+    setIsExporting(true);
+    try {
+      const entries = await journalService.exportEntriesToJson(user.uid);
+      if (entries.length === 0) {
+        toast({ title: "No Entries", description: "There are no entries to export." });
+        return;
+      }
+
+      const jsonString = JSON.stringify(entries, null, 2); // Pretty print JSON
+      const blob = new Blob([jsonString], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      const date = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+      link.download = `journal_backup_${date}.json`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+
+      toast({ title: "Export Successful", description: `Exported ${entries.length} entries.` });
+
+    } catch (error) {
+      console.error("Export failed:", error);
+      toast({ title: "Export Failed", description: "Could not export journal entries.", variant: "destructive" });
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  // Handle Import - Triggered when file input changes
+  const handleImport = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    if (!user) {
+      toast({ title: "Error", description: "You must be logged in to import data.", variant: "destructive" });
+      return;
+    }
+
+    const file = event.target.files?.[0];
+    if (!file) {
+      return; // No file selected
+    }
+
+    if (file.type !== 'application/json') {
+      toast({ title: "Invalid File Type", description: "Please select a .json file.", variant: "destructive" });
+      return;
+    }
+
+    setIsImporting(true);
+    const reader = new FileReader();
+
+    reader.onload = async (e) => {
+      const content = e.target?.result;
+      if (typeof content !== 'string') {
+        toast({ title: "Import Failed", description: "Could not read file content.", variant: "destructive" });
+        setIsImporting(false);
+        return;
+      }
+
+      try {
+        const entriesToImport = JSON.parse(content);
+        
+        // Validate if it's an array (basic check)
+        if (!Array.isArray(entriesToImport)) {
+          throw new Error("Invalid JSON format: Expected an array of journal entries.");
+        }
+
+        const result = await journalService.importEntriesFromJson(user.uid, entriesToImport);
+
+        let description = `Successfully imported/updated ${result.successCount} entries.`;
+        if (result.errorCount > 0) {
+          description += ` Skipped ${result.errorCount} entries due to errors. Check console for details.`;
+          console.warn("Import errors:", result.errors);
+        }
+
+        toast({ 
+          title: "Import Complete", 
+          description: description,
+          variant: result.errorCount > 0 ? "warning" : "default" 
+        });
+        
+        // Optional: Force refresh or navigate to entries page
+        // router.push('/entries'); 
+
+      } catch (error) {
+        console.error("Import failed:", error);
+        toast({ title: "Import Failed", description: `Error processing file: ${(error as Error).message}`, variant: "destructive" });
+      } finally {
+        setIsImporting(false);
+        // Reset file input so the same file can be selected again if needed
+        if (importFileInputRef.current) {
+          importFileInputRef.current.value = "";
+        }
+      }
+    };
+
+    reader.onerror = () => {
+      toast({ title: "Import Failed", description: "Error reading file.", variant: "destructive" });
+      setIsImporting(false);
+       // Reset file input
+       if (importFileInputRef.current) {
+        importFileInputRef.current.value = "";
+      }
+    };
+
+    reader.readAsText(file);
+  };
+
+  // Function to trigger file input click
+  const triggerImportFile = () => {
+    importFileInputRef.current?.click();
+  };
 
   // Handle clear data
   const handleClearData = () => {
@@ -230,43 +354,65 @@ export default function SettingsPage() {
           <div>
             <h2 className="text-lg font-medium">Data Management</h2>
             <Separator className="my-2" />
-            <div className="py-2">
+            <div className="space-y-4 py-2">
+              {/* Export Button */}
+              <Button 
+                variant="outline"
+                className="w-full justify-start"
+                onClick={handleExport}
+                disabled={isExporting || isImporting}
+              >
+                {isExporting ? (
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                ) : (
+                  <Download className="h-4 w-4 mr-2" />
+                )}
+                Export Journal Data (.json)
+              </Button>
+
+              {/* Import Button / File Input */}
+              <Button 
+                variant="outline"
+                className="w-full justify-start"
+                onClick={triggerImportFile} 
+                disabled={isImporting || isExporting}
+              >
+                {isImporting ? (
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                ) : (
+                  <Upload className="h-4 w-4 mr-2" />
+                )}
+                Import Journal Data (.json)
+              </Button>
+              <input
+                type="file"
+                ref={importFileInputRef}
+                onChange={handleImport}
+                accept=".json"
+                className="hidden" // Hide the actual file input
+              />
+
+              {/* Clear Data Button (Existing) */}
               <AlertDialog>
                 <AlertDialogTrigger asChild>
-                  <Button variant="destructive" className="w-full">
+                  <Button variant="destructive" className="w-full justify-start">
                     <Trash2 className="h-4 w-4 mr-2" />
-                    Clear All Data
+                    Clear All Local Data
                   </Button>
                 </AlertDialogTrigger>
                 <AlertDialogContent>
                   <AlertDialogHeader>
-                    <AlertDialogTitle>Delete all entries?</AlertDialogTitle>
+                    <AlertDialogTitle>Clear all local data?</AlertDialogTitle>
                     <AlertDialogDescription>
-                      This will permanently delete all your journal entries. This action cannot be undone.
+                      This will permanently delete all journal entries stored in this browser. This action cannot be undone. Export your data first if you want a backup.
                     </AlertDialogDescription>
                   </AlertDialogHeader>
                   <AlertDialogFooter>
                     <AlertDialogCancel>Cancel</AlertDialogCancel>
-                    <AlertDialog>
-                      <AlertDialogTrigger asChild>
-                        <AlertDialogAction variant="destructive">Delete</AlertDialogAction>
-                      </AlertDialogTrigger>
-                      <AlertDialogContent>
-                        <AlertDialogHeader>
-                          <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
-                          <AlertDialogDescription>
-                            This action is permanent and cannot be undone. All your journal entries will be permanently
-                            deleted.
-                          </AlertDialogDescription>
-                        </AlertDialogHeader>
-                        <AlertDialogFooter>
-                          <AlertDialogCancel>Cancel</AlertDialogCancel>
-                          <AlertDialogAction variant="destructive" onClick={handleClearData}>
-                            Yes, delete everything
-                          </AlertDialogAction>
-                        </AlertDialogFooter>
-                      </AlertDialogContent>
-                    </AlertDialog>
+                    {/* Make sure the action calls the correct handler */}
+                    <AlertDialogAction onClick={handleClearData} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                      Clear Data
+                    </AlertDialogAction>
                   </AlertDialogFooter>
                 </AlertDialogContent>
               </AlertDialog>

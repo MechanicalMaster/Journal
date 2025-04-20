@@ -6,6 +6,7 @@ import { Book, Settings, List, WifiOff, LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/lib/auth-context";
 import { motion } from "framer-motion";
+import { Skeleton } from "@/components/ui/skeleton";
 
 // Animation Variant
 const fadeInUp = {
@@ -14,9 +15,9 @@ const fadeInUp = {
   transition: { duration: 0.5, ease: "easeOut" }
 };
 
-export default function HomePage() {
+function HomePageContent() {
   const router = useRouter();
-  const { user, userProfile, logout, loading } = useAuth();
+  const { user, userProfile, logout } = useAuth();
   const [isOnline, setIsOnline] = useState(true);
 
   // Determine display name (prioritize Dexie profile)
@@ -51,13 +52,6 @@ export default function HomePage() {
       console.error("Failed to log out:", error);
     }
   };
-
-  // Don't render main content until auth check is complete
-  if (loading) {
-    // Optional: You could return a specific loading indicator for this page
-    // or rely on the layout's global loading state.
-    return null; // Or a loading spinner specific to this page
-  }
 
   return (
     <div className="flex flex-col min-h-screen bg-gray-50 dark:bg-gray-900">
@@ -132,4 +126,52 @@ export default function HomePage() {
       </footer>
     </div>
   );
+}
+
+function HomePageSkeleton() {
+  return (
+    <div className="flex flex-col min-h-screen bg-gray-50 dark:bg-gray-900 animate-pulse">
+      {/* Skeleton Header */}
+      <header className="bg-white dark:bg-gray-950 border-b dark:border-gray-800 py-4">
+        <div className="container mx-auto px-4 flex justify-between items-center">
+          <div className="flex items-center space-x-2">
+            <Skeleton className="h-6 w-6 rounded" />
+            <Skeleton className="h-6 w-20" />
+          </div>
+          <Skeleton className="h-8 w-24" /> 
+        </div>
+      </header>
+
+      {/* Skeleton Welcome Message */}
+      <div className="container mx-auto px-4 pt-6 text-center">
+        <Skeleton className="h-8 w-1/2 mx-auto" />
+      </div>
+
+      {/* Skeleton Main Content */}
+      <main className="flex-1 flex flex-col items-center justify-center p-6 space-y-8">
+        <div className="grid gap-6 w-full max-w-md">
+          <Skeleton className="h-24 w-full rounded-lg" />
+          <Skeleton className="h-24 w-full rounded-lg" />
+          <Skeleton className="h-24 w-full rounded-lg" />
+        </div>
+      </main>
+
+      {/* Skeleton Footer */}
+      <footer className="border-t dark:border-gray-800 py-4">
+        <div className="container mx-auto px-4 text-center">
+          <Skeleton className="h-4 w-1/4 mx-auto" />
+        </div>
+      </footer>
+    </div>
+  );
+}
+
+export default function HomePage() {
+  const { loading } = useAuth();
+
+  if (loading) {
+    return <HomePageSkeleton />;
+  }
+
+  return <HomePageContent />;
 } 

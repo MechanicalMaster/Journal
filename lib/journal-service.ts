@@ -24,15 +24,24 @@ export const journalService = {
     }
   },
 
-  // Get all entries for a user
-  async getEntries(userId: string): Promise<JournalEntry[]> {
+  // Get all entries for a user with pagination
+  async getEntries(userId: string, page: number = 1, limit: number = 20): Promise<{ entries: JournalEntry[], totalCount: number }> {
     try {
-      // Use Dexie to get entries, filter by userId, and sort
-      return await db.journalEntries
+      const collection = db.journalEntries
         .where('userId')
-        .equals(userId)
-        .reverse() // To sort by createdAt descending
-        .sortBy('createdAt');
+        .equals(userId);
+
+      // Get the total count for pagination controls
+      const totalCount = await collection.count();
+
+      // Apply sorting (descending by createdAt) and pagination
+      const entries = await collection
+        .reverse() // Sort by createdAt descending
+        .offset((page - 1) * limit) // Calculate offset based on page number
+        .limit(limit) // Limit the number of results
+        .sortBy('createdAt'); // sortBy after offset/limit
+
+      return { entries, totalCount };
     } catch (error) {
       console.error('Error getting journal entries:', error);
       throw error;

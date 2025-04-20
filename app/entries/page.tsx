@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo } from "react"
 import { useRouter } from "next/navigation"
 import {
   ArrowLeft,
@@ -19,6 +19,7 @@ import {
   ChevronDown,
   ChevronUp,
   X,
+  Loader2,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -56,6 +57,7 @@ import { useAuth } from "@/lib/auth-context"
 import { journalService } from "@/lib/journal-service"
 import { useToast } from "@/components/ui/use-toast"
 import { JournalEntry } from "@/lib/db"
+import { Skeleton } from "@/components/ui/skeleton"
 
 // Mock data for entries
 const mockEntries: JournalEntry[] = Array.from({ length: 50 }, (_, i) => {
@@ -108,10 +110,10 @@ export default function EntriesListScreen() {
   const { user } = useAuth()
   const { toast } = useToast()
   const [entries, setEntries] = useState<JournalEntry[]>([])
-  const [filteredEntries, setFilteredEntries] = useState<JournalEntry[]>([])
-  const [displayedEntries, setDisplayedEntries] = useState<JournalEntry[]>([])
+  const [totalEntries, setTotalEntries] = useState(0)
+  const [isEntriesLoading, setIsEntriesLoading] = useState(true)
+  const [currentPage, setCurrentPage] = useState(1)
   const [searchQuery, setSearchQuery] = useState("")
-  const [page, setPage] = useState(1)
   const [sortOrder, setSortOrder] = useState<"newest" | "oldest">("newest")
   const [isFilterSheetOpen, setIsFilterSheetOpen] = useState(false)
   const [activeFilters, setActiveFilters] = useState<{
@@ -130,77 +132,79 @@ export default function EntriesListScreen() {
 
   const ENTRIES_PER_PAGE = 20
 
-  // Fetch entries when the component mounts or when the user changes
-  useEffect(() => {
-    const fetchEntries = async () => {
-      if (!user) {
-        setEntries([])
-        return
-      }
-
-      try {
-        const userEntries = await journalService.getEntries(user.uid)
-        setEntries(userEntries)
-        setFilteredEntries(userEntries)
-      } catch (error) {
-        console.error('Error fetching entries:', error)
-        toast({
-          title: "Error loading entries",
-          description: "There was a problem loading your journal entries.",
-          variant: "destructive",
-        })
-      }
+  const fetchEntries = async (pageToFetch: number, append: boolean = false) => {
+    if (!user) {
+      setEntries([]);
+      setTotalEntries(0);
+      setIsEntriesLoading(false);
+      return;
     }
+    
+    setIsEntriesLoading(true);
+    try {
+      const { entries: fetchedEntries, totalCount } = await journalService.getEntries(
+        user.uid,
+        pageToFetch,
+        ENTRIES_PER_PAGE
+      );
+      
+      setEntries(prevEntries => append ? [...prevEntries, ...fetchedEntries] : fetchedEntries);
+      setTotalEntries(totalCount);
+      setCurrentPage(pageToFetch);
 
-    fetchEntries()
-  }, [user])
+    } catch (error) {
+      console.error('Error fetching entries:', error);
+      toast({
+        title: "Error loading entries",
+        description: "There was a problem loading your journal entries.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsEntriesLoading(false);
+    }
+  }
 
-  // Apply search, filters, and sorting
   useEffect(() => {
-    let result = [...entries]
+    fetchEntries(1);
+  }, [user]);
 
-    // Apply search
+  useEffect(() => {
+    if (user) {
+      fetchEntries(1);
+    }
+  }, [sortOrder, user]);
+
+  useEffect(() => {
+    if (user) {
+      fetchEntries(1);
+    }
+  }, [activeFilters, user]);
+
+  const filteredAndSortedEntries = useMemo(() => {
+    let result = [...entries];
+
     if (searchQuery) {
-      const query = searchQuery.toLowerCase()
+      const query = searchQuery.toLowerCase();
       result = result.filter(
         (entry) =>
-          entry.text.toLowerCase().includes(query) || 
+          (entry.title && entry.title.toLowerCase().includes(query)) ||
+          entry.text.toLowerCase().includes(query) ||
           entry.qualifiers.some((q: string) => q.toLowerCase().includes(query))
-      )
+      );
     }
-
-    // Apply filters
-    if (activeFilters.tones.length > 0) {
-      result = result.filter((entry) => entry.qualifiers.some((q: string) => activeFilters.tones.includes(q)))
-    }
-
-    if (activeFilters.topics.length > 0) {
-      result = result.filter((entry) => entry.qualifiers.some((q: string) => activeFilters.topics.includes(q)))
-    }
-
-    if (activeFilters.moods.length > 0) {
-      result = result.filter((entry) => entry.qualifiers.some((q: string) => activeFilters.moods.includes(q)))
-    }
-
-    // Apply sorting
+    
     result.sort((a, b) => {
-      const dateA = new Date(a.entryDate).getTime()
-      const dateB = new Date(b.entryDate).getTime()
-      return sortOrder === "newest" ? dateB - dateA : dateA - dateB
-    })
-
-    setFilteredEntries(result)
-    setPage(1) // Reset to first page when filters change
-  }, [entries, searchQuery, activeFilters, sortOrder])
-
-  // Handle pagination
-  useEffect(() => {
-    setDisplayedEntries(filteredEntries.slice(0, page * ENTRIES_PER_PAGE))
-  }, [filteredEntries, page])
+        const dateA = new Date(a.entryDate).getTime()
+        const dateB = new Date(b.entryDate).getTime()
+        return sortOrder === "newest" ? dateB - dateA : dateA - dateB
+    });
+    
+    return result;
+  }, [entries, searchQuery, sortOrder]);
 
   const loadMoreEntries = () => {
-    if (page * ENTRIES_PER_PAGE < filteredEntries.length) {
-      setPage(page + 1)
+    if (!isEntriesLoading && entries.length < totalEntries) {
+      fetchEntries(currentPage + 1, true);
     }
   }
 
@@ -277,12 +281,10 @@ export default function EntriesListScreen() {
     router.push("/")
   }
 
-  // Update the handleDelete function
   const handleDelete = async (entryId: string) => {
     try {
       await journalService.deleteEntry(entryId)
       setEntries((prevEntries) => prevEntries.filter((entry) => entry.id !== entryId))
-      setFilteredEntries((prevEntries) => prevEntries.filter((entry) => entry.id !== entryId))
       
       toast({
         title: "Entry deleted",
@@ -355,7 +357,23 @@ export default function EntriesListScreen() {
       </header>
 
       <main className="flex-1 container p-4 space-y-4">
-        {filteredEntries.length === 0 ? (
+        {isEntriesLoading && entries.length === 0 ? (
+          <div className="grid gap-4">
+            {[...Array(5)].map((_, i) => (
+              <div key={i} className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4">
+                <div className="flex justify-between items-start">
+                  <div className="flex-1 space-y-2">
+                    <Skeleton className="h-5 w-3/4" />
+                    <Skeleton className="h-4 w-1/4" />
+                    <Skeleton className="h-4 w-full" />
+                    <Skeleton className="h-4 w-5/6" />
+                  </div>
+                  <Skeleton className="h-8 w-8 rounded-full" />
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : filteredAndSortedEntries.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-64 text-center">
             <BookOpen className="h-12 w-12 text-gray-400 mb-4" />
             <h3 className="text-lg font-medium">No entries found</h3>
@@ -380,11 +398,11 @@ export default function EntriesListScreen() {
         ) : (
           <>
             <div className="text-sm text-gray-500 dark:text-gray-400">
-              Showing {displayedEntries.length} of {filteredEntries.length} entries
+              Showing {filteredAndSortedEntries.length} of {totalEntries} entries {searchQuery || getTotalActiveFilters() > 0 ? "(filtered)" : ""}
             </div>
 
             <div className="grid gap-4">
-              {displayedEntries.map((entry) => (
+              {filteredAndSortedEntries.map((entry) => (
                 <div
                   key={entry.id}
                   className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4 hover:shadow-md transition-shadow cursor-pointer"
@@ -428,10 +446,13 @@ export default function EntriesListScreen() {
                 </div>
               ))}
             </div>
-
-            {displayedEntries.length < filteredEntries.length && (
+            
+            {entries.length < totalEntries && (
               <div className="flex justify-center mt-6">
-                <Button variant="outline" onClick={loadMoreEntries}>
+                <Button variant="outline" onClick={loadMoreEntries} disabled={isEntriesLoading}>
+                  {isEntriesLoading ? (
+                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : null}
                   Load More
                 </Button>
               </div>
@@ -440,7 +461,6 @@ export default function EntriesListScreen() {
         )}
       </main>
 
-      {/* Filter Sheet */}
       <Sheet open={isFilterSheetOpen} onOpenChange={setIsFilterSheetOpen}>
         <SheetContent className="w-full sm:max-w-md">
           <SheetHeader>
@@ -518,7 +538,6 @@ export default function EntriesListScreen() {
         </SheetContent>
       </Sheet>
 
-      {/* Export Dialog */}
       <Dialog open={showExportDialog} onOpenChange={setShowExportDialog}>
         <DialogContent>
           <DialogHeader>
@@ -566,8 +585,8 @@ export default function EntriesListScreen() {
                     <Label htmlFor="scope-all">All Entries</Label>
                   </div>
                   <div className="flex items-center space-x-2">
-                    <Checkbox id="scope-filtered" disabled={filteredEntries.length === entries.length} />
-                    <Label htmlFor="scope-filtered">Filtered Entries ({filteredEntries.length})</Label>
+                    <Checkbox id="scope-filtered" disabled={filteredAndSortedEntries.length === entries.length} />
+                    <Label htmlFor="scope-filtered">Filtered Entries ({filteredAndSortedEntries.length})</Label>
                   </div>
                 </div>
               </div>

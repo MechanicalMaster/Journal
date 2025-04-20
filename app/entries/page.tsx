@@ -53,11 +53,12 @@ import {
 import { Progress } from "@/components/ui/progress"
 import { cn } from "@/lib/utils"
 import { useAuth } from "@/lib/auth-context"
-import { journalService, JournalEntry } from "@/lib/journal-service"
+import { journalService } from "@/lib/journal-service"
 import { useToast } from "@/components/ui/use-toast"
+import { JournalEntry } from "@/lib/db"
 
 // Mock data for entries
-const mockEntries = Array.from({ length: 50 }, (_, i) => {
+const mockEntries: JournalEntry[] = Array.from({ length: 50 }, (_, i) => {
   const id = i + 1
   const date = new Date()
   date.setDate(date.getDate() - Math.floor(Math.random() * 30))
@@ -84,10 +85,14 @@ const mockEntries = Array.from({ length: 50 }, (_, i) => {
 
   return {
     id: `ENTRY-${id.toString().padStart(4, "0")}`,
-    date: date.toISOString(),
+    userId: "mock-user",
+    title: `Entry ${id}`,
     text,
+    images: [],
     qualifiers,
-    thumbnail: `/placeholder.svg?height=100&width=80&text=Entry+${id}`,
+    entryDate: date,
+    createdAt: date,
+    updatedAt: date,
   }
 })
 
@@ -179,8 +184,8 @@ export default function EntriesListScreen() {
 
     // Apply sorting
     result.sort((a, b) => {
-      const dateA = new Date(a.createdAt).getTime()
-      const dateB = new Date(b.createdAt).getTime()
+      const dateA = new Date(a.entryDate).getTime()
+      const dateB = new Date(b.entryDate).getTime()
       return sortOrder === "newest" ? dateB - dateA : dateA - dateB
     })
 
@@ -389,32 +394,22 @@ export default function EntriesListScreen() {
                     <div className="flex-1">
                       <h3 className="font-medium">{entry.title}</h3>
                       <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-                        {formatDate(entry.createdAt)}
+                        {formatDate(entry.entryDate)}
                       </p>
                       <p className="mt-2 text-gray-600 dark:text-gray-300 line-clamp-2">
                         {entry.text}
                       </p>
                       {entry.images && entry.images.length > 0 && (
                         <div className="mt-2 flex gap-2">
-                          {entry.images.slice(0, 3).map((image, index) => (
-                            <div
-                              key={index}
-                              className="w-16 h-16 rounded-md bg-gray-100 dark:bg-gray-700 overflow-hidden"
-                            >
+                          {entry.images.map((image: string, index: number) => (
+                            <div key={index} className="relative h-16 w-16">
                               <img
                                 src={image}
                                 alt={`Entry image ${index + 1}`}
-                                className="w-full h-full object-cover"
+                                className="h-full w-full object-cover rounded-md"
                               />
                             </div>
                           ))}
-                          {entry.images.length > 3 && (
-                            <div className="w-16 h-16 rounded-md bg-gray-100 dark:bg-gray-700 flex items-center justify-center">
-                              <span className="text-sm text-gray-500">
-                                +{entry.images.length - 3}
-                              </span>
-                            </div>
-                          )}
                         </div>
                       )}
                     </div>

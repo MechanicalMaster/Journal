@@ -8,6 +8,7 @@ export const journalService = {
       const newEntry: JournalEntry = {
         ...entry,
         id: Date.now().toString(), // Generate a unique ID (consistent with previous logic)
+        entryDate: entry.entryDate || new Date(), // Use provided entryDate or current date
         createdAt: new Date(),
         updatedAt: new Date(),
       };
@@ -88,7 +89,8 @@ export const journalService = {
     title: string,
     text: string,
     imageDataUrls: string[],
-    qualifiers: string[]
+    qualifiers: string[],
+    entryDate?: Date
   ): Promise<JournalEntry> {
     try {
       console.log(`Processing journal entry for user ${userId} with ${imageDataUrls.length} images`);
@@ -100,6 +102,7 @@ export const journalService = {
         text: text || '',
         images: imageDataUrls || [], // Store the data URLs directly
         qualifiers: qualifiers || [],
+        entryDate: entryDate || new Date(), // Use provided entryDate or current date
       });
     } catch (error) {
       console.error('Error processing and saving entry:', error);
@@ -146,9 +149,6 @@ export const journalService = {
       }
       
       // **Crucially, ensure the entry's userId matches the currently logged-in user**
-      // Allow import *only* if the entry's userId matches the importing user, 
-      // or if the entry doesn't have a userId field (maybe older format? - decide how to handle)
-      // For now, we strictly enforce matching userId.
       if (entryData.userId !== userId) {
          errors.push(`Skipping entry ID ${entryData.id}: User ID mismatch.`);
          errorCount++;
@@ -164,12 +164,13 @@ export const journalService = {
           text: typeof entryData.text === 'string' ? entryData.text : '',
           images: Array.isArray(entryData.images) ? entryData.images.filter((img: string) => typeof img === 'string') : [],
           qualifiers: Array.isArray(entryData.qualifiers) ? entryData.qualifiers.filter((q: string) => typeof q === 'string') : [],
+          entryDate: entryData.entryDate ? new Date(entryData.entryDate) : new Date(), // Use imported entryDate or now
           createdAt: entryData.createdAt ? new Date(entryData.createdAt) : new Date(),
-          updatedAt: entryData.updatedAt ? new Date(entryData.updatedAt) : new Date(), // Use imported date or now
+          updatedAt: entryData.updatedAt ? new Date(entryData.updatedAt) : new Date(),
         };
         
         // Check if dates are valid after conversion
-        if (isNaN(validatedEntry.createdAt.getTime()) || isNaN(validatedEntry.updatedAt.getTime())) {
+        if (isNaN(validatedEntry.entryDate.getTime()) || isNaN(validatedEntry.createdAt.getTime()) || isNaN(validatedEntry.updatedAt.getTime())) {
           throw new Error(`Invalid date format for entry ID ${validatedEntry.id}`);
         }
 

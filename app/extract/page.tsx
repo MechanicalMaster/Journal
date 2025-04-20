@@ -24,6 +24,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Label } from "@/components/ui/label"
 import { Separator } from "@/components/ui/separator"
 import { MultiImageExtractor } from "@/components/multi-image-extractor"
+import { Calendar as CalendarComponent } from "@/components/ui/calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { format } from "date-fns";
 
 export default function TextExtractionScreen() {
   return (
@@ -50,6 +53,7 @@ function TextExtractionContent() {
   const { user } = useAuth()
   const [extractedText, setExtractedText] = useState("")
   const [title, setTitle] = useState("")
+  const [entryDate, setEntryDate] = useState<Date | undefined>(new Date())
   const [isLoading, setIsLoading] = useState(true)
   const [ocrFailed, setOcrFailed] = useState(false)
   const [statusMessage, setStatusMessage] = useState("Extracting text...")
@@ -138,7 +142,8 @@ function TextExtractionContent() {
       await journalService.updateEntry(tempEntryId!, {
         title: finalTitle,
         text: extractedText,
-        qualifiers: qualifiers
+        qualifiers: qualifiers,
+        entryDate: entryDate || new Date()
       })
 
       toast({
@@ -275,6 +280,22 @@ function TextExtractionContent() {
                   onChange={(e) => setTitle(e.target.value)}
                   className="text-base"
                 />
+              </div>
+            )}
+            
+            {!isLoading && !ocrFailed && (
+              <div className="mb-6">
+                <Label className="text-lg font-semibold mb-2 block">Date of Entry</Label>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button variant="outline" className="w-full justify-start text-left font-normal">
+                      {entryDate ? format(entryDate, "PPP") : <span>Pick a date</span>}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <CalendarComponent mode="single" selected={entryDate} onSelect={setEntryDate} initialFocus />
+                  </PopoverContent>
+                </Popover>
               </div>
             )}
             

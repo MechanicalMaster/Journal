@@ -7,6 +7,7 @@ export interface JournalEntry {
   text: string;
   images: string[]; // Array of data URLs
   qualifiers: string[];
+  entryDate: Date; // Date when the entry was written
   createdAt: Date;
   updatedAt: Date;
 }
@@ -32,6 +33,11 @@ export class MySubclassedDexie extends Dexie {
     this.version(2).stores({
       journalEntries: '&id, userId, createdAt, title', // Keep existing table definition
       userProfiles: '&userId, updatedAt' // Add userProfiles table, userId is primary key
+    });
+    // Add version 3 for the entryDate field
+    this.version(3).stores({
+      journalEntries: '&id, userId, createdAt, title, entryDate', // Add entryDate to indexed fields
+      userProfiles: '&userId, updatedAt'
     });
     // Add further versions here if needed
   }

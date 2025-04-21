@@ -133,15 +133,15 @@ export default function EntriesListScreen() {
   const ENTRIES_PER_PAGE = 20
 
   const fetchEntries = async (pageToFetch: number, append: boolean = false) => {
-    if (!user) {
+      if (!user) {
       setEntries([]);
       setTotalEntries(0);
       setIsEntriesLoading(false);
       return;
-    }
-    
+      }
+
     setIsEntriesLoading(true);
-    try {
+      try {
       const { entries: fetchedEntries, totalCount } = await journalService.getEntries(
         user.uid,
         pageToFetch,
@@ -152,17 +152,17 @@ export default function EntriesListScreen() {
       setTotalEntries(totalCount);
       setCurrentPage(pageToFetch);
 
-    } catch (error) {
+      } catch (error) {
       console.error('Error fetching entries:', error);
-      toast({
-        title: "Error loading entries",
-        description: "There was a problem loading your journal entries.",
-        variant: "destructive",
+        toast({
+          title: "Error loading entries",
+          description: "There was a problem loading your journal entries.",
+          variant: "destructive",
       });
     } finally {
       setIsEntriesLoading(false);
+      }
     }
-  }
 
   useEffect(() => {
     fetchEntries(1);
@@ -188,15 +188,15 @@ export default function EntriesListScreen() {
       result = result.filter(
         (entry) =>
           (entry.title && entry.title.toLowerCase().includes(query)) ||
-          entry.text.toLowerCase().includes(query) ||
+          entry.text.toLowerCase().includes(query) || 
           entry.qualifiers.some((q: string) => q.toLowerCase().includes(query))
       );
     }
-    
+
     result.sort((a, b) => {
         const dateA = new Date(a.entryDate).getTime()
         const dateB = new Date(b.entryDate).getTime()
-        return sortOrder === "newest" ? dateB - dateA : dateA - dateB
+      return sortOrder === "newest" ? dateB - dateA : dateA - dateB
     });
     
     return result;
@@ -446,7 +446,7 @@ export default function EntriesListScreen() {
                 </div>
               ))}
             </div>
-            
+
             {entries.length < totalEntries && (
               <div className="flex justify-center mt-6">
                 <Button variant="outline" onClick={loadMoreEntries} disabled={isEntriesLoading}>

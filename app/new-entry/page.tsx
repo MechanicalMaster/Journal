@@ -8,56 +8,111 @@ import { cn } from "@/lib/utils"
 import { useAuth } from "@/lib/auth-context"
 import { journalService } from "@/lib/journal-service"
 import { useToast } from "@/components/ui/use-toast"
+import { imageProcessor } from '@/lib/image-processor'
+
+// Mock functions for readFileAsDataURL if not present (replace with actual if needed)
+// You likely already have a way to get the data URL from the file input/camera
+async function readFileAsDataURL(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
 
 export default function UploadScreen() {
   const router = useRouter()
-  const { user } = useAuth()
-  const fileInputRef = useRef<HTMLInputElement>(null)
-  const canvasRef = useRef<HTMLCanvasElement>(null)
-  const [pageCount, setPageCount] = useState(1)
-  const [capturedImages, setCapturedImages] = useState<string[]>([])
-  const [showAddAnother, setShowAddAnother] = useState(false)
-  const [currentImage, setCurrentImage] = useState<string | null>(null)
-  const [isNavigating, setIsNavigating] = useState(false)
   const { toast } = useToast()
+  const { user } = useAuth()
+  const [capturedImages, setCapturedImages] = useState<string[]>([])
+  const [currentImage, setCurrentImage] = useState<string | null>(null)
+  const [isCameraOpen, setIsCameraOpen] = useState(false)
+  const [facingMode, setFacingMode] = useState("environment")
+  const [showAddAnother, setShowAddAnother] = useState(false)
+  const [pageCount, setPageCount] = useState(1)
+  const [isProcessing, setIsProcessing] = useState(false) // For compression feedback
+  const [isNavigating, setIsNavigating] = useState(false) // For navigation feedback
 
-  // Handle file selection
-  const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const files = event.target.files
-    if (!files || files.length === 0) return
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const canvasRef = useRef<HTMLCanvasElement>(null);
 
-    const file = files[0]
-    if (!file.type.startsWith('image/')) {
-      alert('Please select an image file')
-      return
+  // Function to handle file input change
+  const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    if (!file) return
+
+    setIsProcessing(true); // Indicate start of processing
+    try {
+      // 1. Get original Data URL
+      const originalDataUrl = await readFileAsDataURL(file);
+
+      // 2. Get compression level from localStorage (or default)
+      const compressionLevel = localStorage.getItem('compressionLevel') || 'Medium';
+
+      // 3. Compress the image
+      const compressionResult = await imageProcessor.compressImage(
+        originalDataUrl,
+        compressionLevel as 'Low' | 'Medium' | 'High' // Use appropriate type
+      );
+
+      // 4. Use the compressed Data URL
+      setCurrentImage(compressionResult.dataUrl);
+      setCapturedImages(prev => [...prev, compressionResult.dataUrl]); // Add compressed image
+      setShowAddAnother(true);
+       toast({ title: "Image Added", description: `Compressed from ${Math.round(compressionResult.originalSize / 1024)}KB to ${Math.round(compressionResult.compressedSize / 1024)}KB.` });
+
+    } catch (error) {
+        console.error("Error processing image:", error);
+        toast({
+            title: "Error Adding Image",
+            description: "Could not process the selected image.",
+            variant: "destructive",
+        });
+        // Optionally show the original if compression fails?
+        // setCurrentImage(originalDataUrl); 
+    } finally {
+        setIsProcessing(false); // Indicate end of processing
+         // Reset file input
+        if (fileInputRef.current) {
+            fileInputRef.current.value = '';
+        }
     }
-
-    const reader = new FileReader()
-    reader.onload = (e) => {
-      if (e.target?.result) {
-        const imageDataUrl = e.target.result.toString()
-        setCurrentImage(imageDataUrl)
-        // Process the image once it's loaded
-        processImage(imageDataUrl)
-      }
-    }
-    reader.readAsDataURL(file)
   }
 
-  // Process the image once selected
-  const processImage = (imageDataUrl: string) => {
-    // Add to captured images array
-    const newCapturedImages = [...capturedImages, imageDataUrl]
-    setCapturedImages(newCapturedImages)
-    
-    // Show "Add Another Page" option
-    setShowAddAnother(true)
-  }
+  // Function to handle image capture from camera (similar modification needed)
+  const handleImageCapture = async (dataUrl: string) => {
+     setIsCameraOpen(false);
+     setIsProcessing(true); // Indicate start of processing
+     try {
+       // 1. Original Data URL is already provided (dataUrl)
+       
+       // 2. Get compression level
+       const compressionLevel = localStorage.getItem('compressionLevel') || 'Medium';
 
-  // Trigger file input click
-  const triggerFileUpload = () => {
-    fileInputRef.current?.click()
-  }
+       // 3. Compress
+       const compressionResult = await imageProcessor.compressImage(
+         dataUrl,
+         compressionLevel as 'Low' | 'Medium' | 'High' // Use appropriate type
+       );
+
+       // 4. Use compressed Data URL
+       setCurrentImage(compressionResult.dataUrl);
+       setCapturedImages(prev => [...prev, compressionResult.dataUrl]); // Add compressed image
+       setShowAddAnother(true);
+       toast({ title: "Image Captured", description: `Compressed from ${Math.round(compressionResult.originalSize / 1024)}KB to ${Math.round(compressionResult.compressedSize / 1024)}KB.` });
+
+     } catch (error) {
+         console.error("Error processing captured image:", error);
+         toast({
+             title: "Error Capturing Image",
+             description: "Could not process the captured image.",
+             variant: "destructive",
+         });
+     } finally {
+         setIsProcessing(false); // Indicate end of processing
+     }
+   }
 
   // Add another page
   const addAnotherPage = () => {
@@ -121,7 +176,7 @@ export default function UploadScreen() {
         ref={fileInputRef} 
         className="hidden" 
         accept="image/*"
-        onChange={handleFileSelect}
+        onChange={handleFileChange}
       />
 
       {/* Image Preview */}
@@ -183,9 +238,10 @@ export default function UploadScreen() {
               "w-16 h-16 rounded-full flex items-center justify-center",
               "bg-white hover:bg-gray-200 border-4 border-gray-300",
             )}
-            onClick={triggerFileUpload}
+            onClick={() => fileInputRef.current?.click()}
+            disabled={isProcessing || isNavigating}
           >
-            <Upload className="h-8 w-8 text-black" />
+            {isProcessing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Upload className="h-8 w-8 text-black" />}
             <span className="sr-only">Upload</span>
           </Button>
         )}

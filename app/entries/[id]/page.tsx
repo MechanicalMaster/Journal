@@ -232,27 +232,51 @@ export default function EntryDetailsScreen({ params }: { params: { id: string } 
 
           {entry.images && entry.images.length > 0 && (
             <>
-          <Separator />
-          <div className="space-y-4">
-            <h3 className="text-lg font-medium">Journal Images</h3>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {entry.images.map((image, i) => (
-                <div
-                  key={i}
-                  className="relative aspect-[3/4] bg-white dark:bg-gray-800 rounded-lg overflow-hidden shadow-sm"
-                >
-                  <img
-                    src={image || "/placeholder.svg"}
-                    alt={`Journal page ${i + 1}`}
-                    className="w-full h-full object-contain"
-                  />
-                  <div className="absolute bottom-2 right-2 px-2 py-1 bg-black/50 rounded-full text-white text-xs">
-                    Page {i + 1}
-                  </div>
+              <Separator />
+              <div className="space-y-4">
+                <h3 className="text-lg font-medium">Journal Images</h3>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {entry.images.map((image, i) => (
+                    <div
+                      key={i}
+                      className="relative aspect-[3/4] bg-white dark:bg-gray-800 rounded-lg overflow-hidden shadow-sm group"
+                    >
+                      <img
+                        src={image || "/placeholder.svg"}
+                        alt={`Journal page ${i + 1}`}
+                        className="w-full h-full object-contain"
+                      />
+                      <div className="absolute bottom-2 right-2 flex items-center space-x-2">
+                        <span className="px-2 py-1 bg-black/50 rounded-full text-white text-xs">
+                          Page {i + 1}
+                        </span>
+                        <Button
+                          size="icon"
+                          variant="outline"
+                          className="h-8 w-8 bg-black/50 text-white hover:bg-black/70 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            // Create a download link for the image
+                            const link = document.createElement('a');
+                            link.href = image;
+                            link.download = `journal-page-${i + 1}.jpg`;
+                            document.body.appendChild(link);
+                            link.click();
+                            document.body.removeChild(link);
+                            
+                            toast({
+                              title: "Image Downloaded",
+                              description: `Journal page ${i + 1} has been downloaded.`,
+                            });
+                          }}
+                        >
+                          <Download className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
-          </div>
+              </div>
             </>
           )}
 

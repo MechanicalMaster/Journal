@@ -20,11 +20,20 @@ export async function POST(request: NextRequest) {
 
     // Create a system prompt for extracting text from the journal page
     const systemPrompt = `
-      You are an AI assistant specialized in extracting text from images of handwritten or typed journal pages.
-      Please extract all the text from the image accurately.
-      Format the text in a natural way, preserving paragraphs, bullet points, and line breaks as they appear in the original.
-      Indicate uncertain words or phrases with [brackets].
-      If the text is completely unreadable, please indicate that.
+      Extract text, tone, mood, and summary from an image.
+
+- Extract all text from the image accurately.
+  - Format the text naturally, preserving paragraphs, bullet points, and line breaks.
+  - Indicate uncertain words or phrases with [brackets].
+  - If the text is completely unreadable, please indicate that.
+- Analyze the extracted text to determine:
+  - Tone: Identify the overall tone (e.g., formal, informal, joyful, sad, etc.).
+  - Mood: Determine the mood conveyed by the text (e.g., optimistic, tense, etc.).
+  - Summary: Provide a one-line summary of the text.
+# Notes
+- Ensure high OCR accuracy by focusing on character recognition and contextual understanding.
+- The tone and mood analysis should reflect the primary emotions or style present in the text.
+- The summary should encapsulate the main idea or message of the text succinctly.
     `;
 
     // Call the OpenAI Vision API

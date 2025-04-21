@@ -27,6 +27,7 @@ import { MultiImageExtractor } from "@/components/multi-image-extractor"
 import { Calendar as CalendarComponent } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { format } from "date-fns";
+import { DatePicker } from "@/components/ui/date-picker";
 
 export default function TextExtractionScreen() {
   return (
@@ -286,16 +287,11 @@ function TextExtractionContent() {
             {!isLoading && !ocrFailed && (
               <div className="mb-6">
                 <Label className="text-lg font-semibold mb-2 block">Date of Entry</Label>
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button variant="outline" className="w-full justify-start text-left font-normal">
-                      {entryDate ? format(entryDate, "PPP") : <span>Pick a date</span>}
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0" align="start">
-                    <CalendarComponent mode="single" selected={entryDate} onSelect={setEntryDate} initialFocus />
-                  </PopoverContent>
-                </Popover>
+                <DatePicker
+                  date={entryDate}
+                  setDate={setEntryDate}
+                  className="w-full"
+                />
               </div>
             )}
             

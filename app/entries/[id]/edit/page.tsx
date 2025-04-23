@@ -2,7 +2,7 @@
 
 import { useState, useEffect, use } from "react"
 import { useRouter } from "next/navigation"
-import { ArrowLeft, Save, X, AlertCircle, Loader2 } from "lucide-react"
+import { ArrowLeft, Save, X, AlertCircle, Loader2, Calendar as CalendarIcon } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { Input } from "@/components/ui/input"
@@ -28,8 +28,13 @@ import {
 } from "@/components/ui/alert-dialog"
 import { useToast } from "@/components/ui/use-toast"
 import { Separator } from "@/components/ui/separator"
-import { journalService, JournalEntry } from "@/lib/journal-service"
+import { journalService } from "@/lib/journal-service"
+import { JournalEntry } from "@/lib/db"
 import { useAuth } from "@/lib/auth-context"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { Calendar } from "@/components/ui/calendar"
+import { format } from "date-fns"
+import { DatePicker } from "@/components/ui/date-picker"
 
 // Tone, topic, and mood options for dropdowns
 const toneOptions = ["Reflective", "Analytical", "Formal", "Informal", "Critical", "Humorous"]
@@ -53,6 +58,8 @@ export default function EditEntryScreen({ params }: { params: { id: string } | P
   const [originalEntry, setOriginalEntry] = useState<JournalEntry | null>(null)
 
   // State for form values
+  const [entryTitle, setEntryTitle] = useState("")
+  const [entryDate, setEntryDate] = useState<Date | undefined>(undefined)
   const [entryText, setEntryText] = useState("")
   const [tone, setTone] = useState(NONE_VALUE)
   const [topic, setTopic] = useState(NONE_VALUE)
@@ -67,10 +74,10 @@ export default function EditEntryScreen({ params }: { params: { id: string } | P
 
   // Extract qualifiers from the entry
   const extractQualifiers = (entry: JournalEntry) => {
-    const toneQualifier = entry.qualifiers.find(q => q.startsWith('Tone:'))?.split(': ')[1] || NONE_VALUE;
-    const topicQualifier = entry.qualifiers.find(q => q.startsWith('Topic:'))?.split(': ')[1] || NONE_VALUE;
-    const moodQualifier = entry.qualifiers.find(q => q.startsWith('Mood:'))?.split(': ')[1] || NONE_VALUE;
-    const contextQualifier = entry.qualifiers.find(q => q.startsWith('Context:'))?.split(': ')[1] || "";
+    const toneQualifier = entry.qualifiers.find((q: string) => q.startsWith('Tone:'))?.split(': ')[1] || NONE_VALUE;
+    const topicQualifier = entry.qualifiers.find((q: string) => q.startsWith('Topic:'))?.split(': ')[1] || NONE_VALUE;
+    const moodQualifier = entry.qualifiers.find((q: string) => q.startsWith('Mood:'))?.split(': ')[1] || NONE_VALUE;
+    const contextQualifier = entry.qualifiers.find((q: string) => q.startsWith('Context:'))?.split(': ')[1] || "";
     
     return { toneQualifier, topicQualifier, moodQualifier, contextQualifier };
   }
@@ -118,6 +125,8 @@ export default function EditEntryScreen({ params }: { params: { id: string } | P
         
         // Extract qualifiers and set form values
         const { toneQualifier, topicQualifier, moodQualifier, contextQualifier } = extractQualifiers(fetchedEntry);
+        setEntryTitle(fetchedEntry.title)
+        setEntryDate(fetchedEntry.entryDate)
         setEntryText(fetchedEntry.text)
         setTone(toneQualifier)
         setTopic(topicQualifier)
@@ -145,6 +154,8 @@ export default function EditEntryScreen({ params }: { params: { id: string } | P
     const { toneQualifier, topicQualifier, moodQualifier, contextQualifier } = extractQualifiers(originalEntry);
     
     return (
+      entryTitle !== originalEntry.title ||
+      (entryDate && originalEntry.entryDate && entryDate.getTime() !== originalEntry.entryDate.getTime()) ||
       entryText !== originalEntry.text ||
       tone !== toneQualifier ||
       topic !== topicQualifier ||
@@ -165,6 +176,8 @@ export default function EditEntryScreen({ params }: { params: { id: string } | P
     const { toneQualifier, topicQualifier, moodQualifier, contextQualifier } = extractQualifiers(originalEntry);
     const newChangedFields: Record<string, boolean> = {}
 
+    if (entryTitle !== originalEntry.title) newChangedFields.title = true
+    if (entryDate && originalEntry.entryDate && entryDate.getTime() !== originalEntry.entryDate.getTime()) newChangedFields.date = true
     if (entryText !== originalEntry.text) newChangedFields.text = true
     if (tone !== toneQualifier) newChangedFields.tone = true
     if (topic !== topicQualifier) newChangedFields.topic = true
@@ -172,7 +185,7 @@ export default function EditEntryScreen({ params }: { params: { id: string } | P
     if (context !== contextQualifier) newChangedFields.context = true
 
     setChangedFields(newChangedFields)
-  }, [entryText, tone, topic, mood, context, originalEntry])
+  }, [entryTitle, entryDate, entryText, tone, topic, mood, context, originalEntry])
 
   const handleSave = async () => {
     if (!originalEntry) return
@@ -192,15 +205,13 @@ export default function EditEntryScreen({ params }: { params: { id: string } | P
       if (topic !== NONE_VALUE) updatedQualifiers.push(`Topic: ${topic}`)
       if (mood !== NONE_VALUE) updatedQualifiers.push(`Mood: ${mood}`)
       if (context) updatedQualifiers.push(`Context: ${context}`)
-
-      // Create a title from the first few words of the text
-      const title = entryText.split(' ').slice(0, 5).join(' ') + '...'
       
       // Save changes
       await journalService.updateEntry(entryId, {
-        title,
+        title: entryTitle,
         text: entryText,
         qualifiers: updatedQualifiers,
+        entryDate: entryDate,
       })
       
       toast({
@@ -252,15 +263,13 @@ export default function EditEntryScreen({ params }: { params: { id: string } | P
       if (topic !== NONE_VALUE) updatedQualifiers.push(`Topic: ${topic}`)
       if (mood !== NONE_VALUE) updatedQualifiers.push(`Mood: ${mood}`)
       if (context) updatedQualifiers.push(`Context: ${context}`)
-
-      // Create a title from the first few words of the text
-      const title = entryText.split(' ').slice(0, 5).join(' ') + '...'
       
       // Save changes
       await journalService.updateEntry(entryId, {
-        title,
+        title: entryTitle,
         text: entryText,
         qualifiers: updatedQualifiers,
+        entryDate: entryDate,
       })
       
       toast({
@@ -336,22 +345,61 @@ export default function EditEntryScreen({ params }: { params: { id: string } | P
 
       <main className="flex-1 container p-4 max-w-2xl mx-auto">
         <div className="space-y-6">
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <Label htmlFor="entry-text" className="text-base font-medium">
-                Entry Text
-              </Label>
-              {changedFields.text && (
-                <span className="text-amber-500 dark:text-amber-400 text-sm font-medium">*Modified</span>
-              )}
+          <div className="space-y-4">
+            {/* Entry Title Field */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label htmlFor="entry-title" className="text-base font-medium">
+                  Title
+                </Label>
+                {changedFields.title && (
+                  <span className="text-amber-500 dark:text-amber-400 text-sm font-medium">*Modified</span>
+                )}
+              </div>
+              <Input
+                id="entry-title"
+                value={entryTitle}
+                onChange={(e) => setEntryTitle(e.target.value)}
+                className="text-base"
+                placeholder="Entry title..."
+              />
             </div>
-            <Textarea
-              id="entry-text"
-              value={entryText}
-              onChange={(e) => setEntryText(e.target.value)}
-              className="min-h-[300px] font-mono text-base"
-              placeholder="Enter your journal text here..."
-            />
+
+            {/* Entry Date Field */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label htmlFor="entry-date" className="text-base font-medium">
+                  Date
+                </Label>
+                {changedFields.date && (
+                  <span className="text-amber-500 dark:text-amber-400 text-sm font-medium">*Modified</span>
+                )}
+              </div>
+              <DatePicker
+                date={entryDate}
+                setDate={setEntryDate}
+                className="w-full"
+              />
+            </div>
+
+            {/* Entry Text Field */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label htmlFor="entry-text" className="text-base font-medium">
+                  Entry Text
+                </Label>
+                {changedFields.text && (
+                  <span className="text-amber-500 dark:text-amber-400 text-sm font-medium">*Modified</span>
+                )}
+              </div>
+              <Textarea
+                id="entry-text"
+                value={entryText}
+                onChange={(e) => setEntryText(e.target.value)}
+                className="min-h-[300px] font-mono text-base"
+                placeholder="Enter your journal text here..."
+              />
+            </div>
           </div>
 
           <Separator />

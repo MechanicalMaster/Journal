@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Edit, Save, User as UserIcon, Camera, Loader2, Mail } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -15,7 +15,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { SettingsContent } from "@/components/settings/SettingsContent";
 import { Header } from "@/components/header";
 
-export default function ProfilePage() {
+// Create a client component that uses searchParams
+function ProfileContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const tabParam = searchParams.get("tab");
@@ -266,5 +267,23 @@ export default function ProfilePage() {
         </Tabs>
       </main>
     </div>
+  );
+}
+
+// Loading fallback for Suspense
+function ProfileLoading() {
+  return (
+    <div className="flex justify-center items-center h-screen">
+      <Loader2 className="h-8 w-8 animate-spin" />
+    </div>
+  );
+}
+
+// Main component with Suspense boundary
+export default function ProfilePage() {
+  return (
+    <Suspense fallback={<ProfileLoading />}>
+      <ProfileContent />
+    </Suspense>
   );
 } 

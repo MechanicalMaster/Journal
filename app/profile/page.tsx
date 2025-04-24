@@ -1,8 +1,8 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { useRouter } from "next/navigation";
-import { ArrowLeft, Edit, Save, User as UserIcon, Camera, Loader2, Mail } from "lucide-react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Edit, Save, User as UserIcon, Camera, Loader2, Mail } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -11,9 +11,15 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/components/ui/use-toast";
 import { useAuth } from "@/lib/auth-context";
 import { Separator } from "@/components/ui/separator";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { SettingsContent } from "@/components/settings/SettingsContent";
+import { Header } from "@/components/header";
 
 export default function ProfilePage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const tabParam = searchParams.get("tab");
+  
   const { user, userProfile, updateUserProfile, loading: authLoading } = useAuth();
   const { toast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -22,9 +28,16 @@ export default function ProfilePage() {
   const [isEditingName, setIsEditingName] = useState(false);
   const [isSavingName, setIsSavingName] = useState(false);
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
+  const [activeTab, setActiveTab] = useState<string>("profile");
 
-  // Initialize display name state when user/profile data loads
+  // Initialize tabs and display name state when data loads
   useEffect(() => {
+    // Set the active tab based on the URL parameter if present
+    if (tabParam === "settings") {
+      setActiveTab("settings");
+    }
+    
+    // Set display name from profile or user data
     if (userProfile?.displayName) {
       setDisplayName(userProfile.displayName);
     } else if (user?.displayName) {
@@ -32,7 +45,7 @@ export default function ProfilePage() {
     } else {
       setDisplayName(""); // Default if no name found
     }
-  }, [userProfile, user]); // Depend on both
+  }, [userProfile, user, tabParam]); // Depend on tab param as well
 
   const handleNameUpdate = async () => {
     // Prevent saving if name hasn't changed or is empty (optional check)
@@ -120,6 +133,17 @@ export default function ProfilePage() {
     fileInputRef.current?.click();
   };
 
+  // Handle tab change and update URL
+  const handleTabChange = (value: string) => {
+    setActiveTab(value);
+    
+    // Update URL without full page refresh
+    const url = value === "settings" 
+      ? `/profile?tab=settings` 
+      : `/profile`;
+    router.push(url, { scroll: false });
+  };
+
   if (authLoading) {
     return (
       <div className="flex justify-center items-center h-screen">
@@ -141,97 +165,105 @@ export default function ProfilePage() {
 
   return (
     <div className="flex flex-col min-h-screen bg-gray-50 dark:bg-gray-900">
-      <header className="sticky top-0 z-10 w-full bg-white dark:bg-gray-950 border-b border-gray-200 dark:border-gray-800">
-        <div className="container flex h-16 items-center px-4">
-          <Button variant="ghost" size="icon" onClick={() => router.back()}>
-            <ArrowLeft className="h-5 w-5" />
-            <span className="sr-only">Go back</span>
-          </Button>
-          <h1 className="ml-4 text-xl font-semibold">Profile</h1>
-        </div>
-      </header>
+      <Header showProfileMenu={false} />
 
-      <main className="flex-1 container p-4 max-w-md mx-auto">
-        <Card>
-          <CardHeader className="items-center">
-            <div className="relative">
-              <Avatar className="h-24 w-24 mb-4">
-                <AvatarImage src={currentPhotoUrl} alt={currentDisplayName} />
-                <AvatarFallback>
-                  {isUploadingPhoto ? (
-                    <Loader2 className="h-8 w-8 animate-spin" />
-                  ) : (
-                    <UserIcon className="h-12 w-12" />
-                  )}
-                </AvatarFallback>
-              </Avatar>
-              <Button
-                size="icon"
-                variant="outline"
-                className="absolute bottom-4 right-0 rounded-full bg-background"
-                onClick={triggerFileInput}
-                disabled={isUploadingPhoto}
-              >
-                <Camera className="h-4 w-4" />
-                <span className="sr-only">Change Photo</span>
-              </Button>
-              <input
-                type="file"
-                ref={fileInputRef}
-                onChange={handlePhotoChange}
-                accept="image/*"
-                className="hidden"
-              />
-            </div>
-            <CardTitle className="text-center text-2xl">
-              {isEditingName ? (
-                <Input
-                  value={displayName}
-                  onChange={(e) => setDisplayName(e.target.value)}
-                  className="text-center text-2xl h-auto p-0 border-0 shadow-none focus-visible:ring-0"
-                  autoFocus
-                  onBlur={() => !isSavingName && setIsEditingName(false)} // Hide input on blur if not saving
-                  onKeyDown={(e) => { if (e.key === 'Enter') handleNameUpdate(); }}
-                />
-              ) : (
-                <span onClick={() => setIsEditingName(true)} className="cursor-pointer hover:opacity-80">
-                  {currentDisplayName}
-                </span>
-              )}
-            </CardTitle>
-            <div className="text-muted-foreground flex items-center text-sm mt-1">
-               <Mail className="h-4 w-4 mr-1" />
-               {user.email}
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <Separator />
-            {/* Name Edit Section */}
-            <div className="space-y-2">
-               <Label htmlFor="displayName">Display Name</Label>
-               <div className="flex items-center space-x-2">
-                  <Input 
-                     id="displayName" 
-                     value={displayName} 
-                     onChange={(e) => setDisplayName(e.target.value)} 
-                     disabled={!isEditingName || isSavingName}
-                  />
-                  <Button 
-                     onClick={handleNameUpdate} 
-                     disabled={isSavingName || currentDisplayName === displayName}
-                     size="icon"
-                     variant={isEditingName ? "default" : "ghost"}
+      <main className="flex-1 container p-4 mx-auto max-w-3xl">
+        <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
+          <TabsList className="grid grid-cols-2 w-full mb-6">
+            <TabsTrigger value="profile">Profile</TabsTrigger>
+            <TabsTrigger value="settings">Settings</TabsTrigger>
+          </TabsList>
+          
+          <TabsContent value="profile" className="space-y-4">
+            <Card>
+              <CardHeader className="items-center">
+                <div className="relative">
+                  <Avatar className="h-24 w-24 mb-4">
+                    <AvatarImage src={currentPhotoUrl} alt={currentDisplayName} />
+                    <AvatarFallback>
+                      {isUploadingPhoto ? (
+                        <Loader2 className="h-8 w-8 animate-spin" />
+                      ) : (
+                        <UserIcon className="h-12 w-12" />
+                      )}
+                    </AvatarFallback>
+                  </Avatar>
+                  <Button
+                    size="icon"
+                    variant="outline"
+                    className="absolute bottom-4 right-0 rounded-full bg-background"
+                    onClick={triggerFileInput}
+                    disabled={isUploadingPhoto}
                   >
-                     {isSavingName ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-                     <span className="sr-only">Save Name</span>
+                    <Camera className="h-4 w-4" />
+                    <span className="sr-only">Change Photo</span>
                   </Button>
-               </div>
-            </div>
-
-             {/* Add other profile settings sections here if needed */}
-
-          </CardContent>
-        </Card>
+                  <input
+                    type="file"
+                    ref={fileInputRef}
+                    onChange={handlePhotoChange}
+                    accept="image/*"
+                    className="hidden"
+                  />
+                </div>
+                <CardTitle className="text-center text-2xl">
+                  {isEditingName ? (
+                    <Input
+                      value={displayName}
+                      onChange={(e) => setDisplayName(e.target.value)}
+                      className="text-center text-2xl h-auto p-0 border-0 shadow-none focus-visible:ring-0"
+                      autoFocus
+                      onBlur={() => !isSavingName && setIsEditingName(false)} // Hide input on blur if not saving
+                      onKeyDown={(e) => { if (e.key === 'Enter') handleNameUpdate(); }}
+                    />
+                  ) : (
+                    <span onClick={() => setIsEditingName(true)} className="cursor-pointer hover:opacity-80">
+                      {currentDisplayName}
+                    </span>
+                  )}
+                </CardTitle>
+                <div className="text-muted-foreground flex items-center text-sm mt-1">
+                  <Mail className="h-4 w-4 mr-1" />
+                  {user.email}
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <Separator />
+                {/* Name Edit Section */}
+                <div className="space-y-2">
+                  <Label htmlFor="displayName">Display Name</Label>
+                  <div className="flex items-center space-x-2">
+                    <Input 
+                      id="displayName" 
+                      value={displayName} 
+                      onChange={(e) => setDisplayName(e.target.value)} 
+                      disabled={!isEditingName || isSavingName}
+                    />
+                    <Button 
+                      onClick={isEditingName ? handleNameUpdate : () => setIsEditingName(true)} 
+                      disabled={isSavingName}
+                      size="icon"
+                      variant={isEditingName ? "default" : "ghost"}
+                    >
+                      {isSavingName ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : isEditingName ? (
+                        <Save className="h-4 w-4" />
+                      ) : (
+                        <Edit className="h-4 w-4" />
+                      )}
+                      <span className="sr-only">{isEditingName ? "Save" : "Edit"} Name</span>
+                    </Button>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+          
+          <TabsContent value="settings">
+            <SettingsContent />
+          </TabsContent>
+        </Tabs>
       </main>
     </div>
   );

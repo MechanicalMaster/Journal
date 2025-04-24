@@ -2,11 +2,12 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { Book, Settings, List, WifiOff, LogOut } from "lucide-react";
+import { Book, List, WifiOff, Camera } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/lib/auth-context";
 import { motion } from "framer-motion";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Header } from "@/components/header";
 
 // Animation Variant
 const fadeInUp = {
@@ -17,7 +18,7 @@ const fadeInUp = {
 
 function HomePageContent() {
   const router = useRouter();
-  const { user, userProfile, logout } = useAuth();
+  const { user, userProfile } = useAuth();
   const [isOnline, setIsOnline] = useState(true);
 
   // Determine display name (prioritize Dexie profile)
@@ -44,29 +45,9 @@ function HomePageContent() {
     };
   }, []);
 
-  const handleLogout = async () => {
-    try {
-      await logout();
-      router.push("/landing");
-    } catch (error) {
-      console.error("Failed to log out:", error);
-    }
-  };
-
   return (
     <div className="flex flex-col min-h-screen bg-gray-50 dark:bg-gray-900">
-      <header className="bg-white dark:bg-gray-950 border-b dark:border-gray-800 py-4">
-        <div className="container mx-auto px-4 flex justify-between items-center">
-          <div className="flex items-center space-x-2">
-            <Book className="h-6 w-6 text-emerald-600" />
-            <span className="text-xl font-bold">Journal</span>
-          </div>
-          <Button variant="ghost" size="sm" onClick={handleLogout}>
-            <LogOut className="h-4 w-4 mr-2" />
-            Logout
-          </Button>
-        </div>
-      </header>
+      <Header />
 
       {/* Welcome Message Section */}
       <div className="container mx-auto px-4 pt-6 text-center">
@@ -92,11 +73,20 @@ function HomePageContent() {
           <Button
             size="lg"
             className="h-24 text-lg bg-emerald-600 hover:bg-emerald-700 dark:bg-emerald-700 dark:hover:bg-emerald-800"
+            onClick={() => router.push("/new-text-entry")}
+          >
+            <Book className="mr-2 h-6 w-6" />
+            Write New Entry
+          </Button>
+          
+          <Button
+            size="lg"
+            className="h-24 text-lg bg-cyan-600 hover:bg-cyan-700 dark:bg-cyan-700 dark:hover:bg-cyan-800"
             onClick={() => router.push("/new-entry")}
             disabled={!isOnline}
           >
-            <Book className="mr-2 h-6 w-6" />
-            New Entry
+            <Camera className="mr-2 h-6 w-6" />
+            Upload Entry (OCR)
           </Button>
 
           <Button
@@ -106,15 +96,6 @@ function HomePageContent() {
           >
             <List className="mr-2 h-6 w-6" />
             View Entries
-          </Button>
-
-          <Button
-            size="lg"
-            className="h-24 text-lg bg-purple-600 hover:bg-purple-700 dark:bg-purple-700 dark:hover:bg-purple-800"
-            onClick={() => router.push("/settings")}
-          >
-            <Settings className="mr-2 h-6 w-6" />
-            Settings
           </Button>
         </div>
       </main>
@@ -138,7 +119,7 @@ function HomePageSkeleton() {
             <Skeleton className="h-6 w-6 rounded" />
             <Skeleton className="h-6 w-20" />
           </div>
-          <Skeleton className="h-8 w-24" /> 
+          <Skeleton className="h-8 w-8 rounded-full" /> 
         </div>
       </header>
 
@@ -150,7 +131,6 @@ function HomePageSkeleton() {
       {/* Skeleton Main Content */}
       <main className="flex-1 flex flex-col items-center justify-center p-6 space-y-8">
         <div className="grid gap-6 w-full max-w-md">
-          <Skeleton className="h-24 w-full rounded-lg" />
           <Skeleton className="h-24 w-full rounded-lg" />
           <Skeleton className="h-24 w-full rounded-lg" />
         </div>

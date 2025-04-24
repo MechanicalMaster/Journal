@@ -4,7 +4,7 @@ import { useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { useAuth } from "@/lib/auth-context"
 import { ProtectedRoute } from "@/components/auth/protected-route"
-import HomePage from "./home"
+import HomePage from "./home/page"
 
 export default function RootPage() {
   const router = useRouter()

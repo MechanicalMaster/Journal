@@ -5,7 +5,6 @@ import type React from "react"
 import { useState, useEffect, useMemo } from "react"
 import { useRouter } from "next/navigation"
 import {
-  ArrowLeft,
   Search,
   Filter,
   SortDesc,
@@ -20,6 +19,9 @@ import {
   ChevronUp,
   X,
   Loader2,
+  User,
+  Settings,
+  LogOut,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -58,6 +60,8 @@ import { journalService } from "@/lib/journal-service"
 import { useToast } from "@/components/ui/use-toast"
 import { JournalEntry } from "@/lib/db"
 import { Skeleton } from "@/components/ui/skeleton"
+import { Header } from "@/components/header"
+import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar"
 
 // Mock data for entries
 const mockEntries: JournalEntry[] = Array.from({ length: 50 }, (_, i) => {
@@ -107,7 +111,7 @@ const filterOptions = {
 
 export default function EntriesListScreen() {
   const router = useRouter()
-  const { user } = useAuth()
+  const { user, logout } = useAuth()
   const { toast } = useToast()
   const [entries, setEntries] = useState<JournalEntry[]>([])
   const [totalEntries, setTotalEntries] = useState(0)
@@ -303,11 +307,13 @@ export default function EntriesListScreen() {
   return (
     <div className="flex flex-col min-h-screen bg-gray-50 dark:bg-gray-900">
       <header className="sticky top-0 z-10 w-full bg-white dark:bg-gray-950 border-b border-gray-200 dark:border-gray-800">
-        <div className="container flex h-16 items-center px-4">
+        <div className="container flex h-16 items-center space-x-4">
           <Button variant="ghost" size="icon" onClick={goBack}>
-            <ArrowLeft className="h-5 w-5" />
+            <BookOpen className="h-6 w-6 text-emerald-600" />
             <span className="sr-only">Go back</span>
           </Button>
+          
+          <h1 className="text-lg font-semibold hidden sm:block">Journal Entries</h1>
 
           <div className="flex-1 mx-4">
             <div className="relative">
@@ -352,6 +358,54 @@ export default function EntriesListScreen() {
               <Download className="h-4 w-4" />
               <span className="sr-only">Export</span>
             </Button>
+            
+            {/* User profile avatar - uses the same structure as in the Header component */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon" className="rounded-full h-8 w-8 overflow-hidden">
+                  <Avatar className="h-8 w-8">
+                    <AvatarImage 
+                      src={user?.photoURL || undefined} 
+                      alt={user?.displayName || 'User'} 
+                    />
+                    <AvatarFallback>
+                      {user?.displayName?.[0]?.toUpperCase() || 'U'}
+                    </AvatarFallback>
+                  </Avatar>
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56">
+                <div className="p-2">
+                  <p className="font-medium">{user?.displayName || 'User'}</p>
+                  <p className="text-xs text-muted-foreground truncate">{user?.email}</p>
+                </div>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem className="cursor-pointer" onClick={() => router.push("/profile")}>
+                  <User className="mr-2 h-4 w-4" />
+                  Profile
+                </DropdownMenuItem>
+                <DropdownMenuItem className="cursor-pointer" onClick={() => router.push("/profile?tab=settings")}>
+                  <Settings className="mr-2 h-4 w-4" />
+                  Settings
+                </DropdownMenuItem>
+                <DropdownMenuItem className="cursor-pointer" onClick={async () => {
+                  try {
+                    await logout();
+                    router.push("/landing");
+                  } catch (error) {
+                    console.error("Failed to log out:", error);
+                    toast({
+                      title: "Logout Failed",
+                      description: "There was a problem logging out.",
+                      variant: "destructive",
+                    });
+                  }
+                }}>
+                  <LogOut className="mr-2 h-4 w-4" />
+                  Log out
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </div>
       </header>

@@ -44,7 +44,7 @@ const features = [
   {
     icon: Sparkles,
     title: "Clean & Intuitive UI",
-    description: "Enjoy a beautifully simple and clutter-free interface designed for a seamless journaling experience.",
+    description: "Enjoy a beautifully simple and clutter-free interface with streamlined settings for a seamless journaling experience.",
     color: "text-green-500",
     bg: "bg-green-50 dark:bg-green-900/20"
   },

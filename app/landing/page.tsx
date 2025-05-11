@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Book, ArrowRight, Lock, ScanText, Sparkles, LayoutPanelLeft } from "lucide-react";
 import { motion } from "framer-motion";
+import { Footer } from "@/components/footer";
 
 // Animation Variants
 const fadeInUp = {
@@ -166,12 +167,7 @@ export default function LandingPage() {
       </section>
 
       {/* Footer */}
-      <footer className="py-8 border-t dark:border-gray-800 mt-auto bg-gray-100 dark:bg-gray-900">
-        <div className="container mx-auto px-4 text-center text-gray-600 dark:text-gray-400">
-          <p>&copy; {new Date().getFullYear()} Journal App. All rights reserved.</p>
-          {/* Optional: Add links to Privacy Policy, etc. */}
-        </div>
-      </footer>
+      <Footer isOnline={true} />
     </div>
   );
 } 

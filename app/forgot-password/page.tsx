@@ -15,6 +15,7 @@ import {
   CardTitle 
 } from "@/components/ui/card";
 import { AlertCircle, Book, CheckCircle } from "lucide-react";
+import { Footer } from "@/components/footer";
 
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState("");
@@ -109,6 +110,8 @@ export default function ForgotPasswordPage() {
           </form>
         </Card>
       </main>
+      
+      <Footer isOnline={true} />
     </div>
   );
 } 

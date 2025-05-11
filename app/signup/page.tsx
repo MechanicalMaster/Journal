@@ -3,6 +3,7 @@
 import { SignUpForm } from "@/components/auth/signup-form";
 import Link from "next/link";
 import { Book } from "lucide-react";
+import { Footer } from "@/components/footer";
 
 export default function SignUpPage() {
   return (
@@ -24,6 +25,8 @@ export default function SignUpPage() {
           <SignUpForm />
         </div>
       </main>
+      
+      <Footer isOnline={true} />
     </div>
   );
 } 

@@ -3,6 +3,7 @@
 import { LoginForm } from "@/components/auth/login-form";
 import Link from "next/link";
 import { Book } from "lucide-react";
+import { Footer } from "@/components/footer";
 
 export default function LoginPage() {
   return (
@@ -23,6 +24,8 @@ export default function LoginPage() {
           <LoginForm />
         </div>
       </main>
+      
+      <Footer isOnline={true} />
     </div>
   );
 } 
